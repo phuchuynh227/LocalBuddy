@@ -1,35 +1,47 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Redirect, Tabs } from 'expo-router'
+import { Text } from 'react-native'
+import { useAuth } from '../../context/AuthContext'
+import { useLanguage } from '../../context/LanguageContext'
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { session, loading } = useAuth()
+  const { t } = useLanguage()
+
+  if (loading) return null
+
+  if (!session) return <Redirect href="/(auth)/login" />
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+    <Tabs screenOptions={{
+      tabBarActiveTintColor: '#1E88E5',
+      tabBarInactiveTintColor: '#9CA3AF',
+      tabBarStyle: { borderTopColor: '#E5E7EB' },
+      headerShown: false,
+    }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: t('tabs.home'),
+          tabBarLabel: t('tabs.home'),
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>{color === '#1E88E5' ? '🏠' : '🏡'}</Text>,
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: t('tabs.explore'),
+          tabBarLabel: t('tabs.explore'),
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>{color === '#1E88E5' ? '🔍' : '🔎'}</Text>,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: t('tabs.profile'),
+          tabBarLabel: t('tabs.profile'),
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>{color === '#1E88E5' ? '👤' : '👥'}</Text>,
         }}
       />
     </Tabs>
-  );
+  )
 }

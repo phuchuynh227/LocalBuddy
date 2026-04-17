@@ -1,98 +1,129 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import {
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const CATEGORIES = [
+  { key: 'cafe', emoji: '☕' },
+  { key: 'gym', emoji: '🏋️' },
+  { key: 'movies', emoji: '🎬' },
+  { key: 'park', emoji: '🌳' },
+  { key: 'food', emoji: '🍽️' },
+  { key: 'study', emoji: '📚' },
+];
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const { user, signOut } = useAuth();
+  const router = useRouter();
+  const { language, toggleLanguage, t } = useLanguage();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.appName}>Local Buddy</Text>
+            <Text style={styles.appSubtitle}>{t('home.subtitle')}</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.langPill} onPress={toggleLanguage} activeOpacity={0.9}>
+              <Text style={styles.langPillText}>
+                {language === 'en' ? '🇺🇸 EN' : '🇻🇳 VN'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.profile} onPress={signOut} activeOpacity={0.9}>
+              <Text style={styles.profileInitials}>
+                {user?.email?.charAt(0).toUpperCase() ?? 'LB'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.planCard}>
+            <Text style={styles.planTitle}>{t('home.planTitle')}</Text>
+            <Text style={styles.planSubtitle}>{t('home.planSubtitle')}</Text>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.planButton}
+                activeOpacity={0.9}
+                onPress={() => router.push('/create-plan' as any)}>
+                <Text style={styles.planButtonText}>{t('home.createPlan')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.mapButton} activeOpacity={0.9} onPress={() => router.push('/map' as any)}>
+                <Text style={styles.mapButtonText}>🗺️ {t('home.map')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t('home.browseTitle')}</Text>
+            <Text style={styles.sectionSubtitle}>{t('home.browseSubtitle')}</Text>
+          </View>
+
+          <View style={styles.categoriesGrid}>
+            {CATEGORIES.map((item) => (
+              <TouchableOpacity
+                key={item.key}
+                style={styles.categoryCard}
+                activeOpacity={0.9}
+                onPress={() => router.push(`/places?category=${item.key}` as any)}
+              >
+                <Text style={styles.categoryEmoji}>{item.emoji}</Text>
+                <Text style={styles.categoryLabel}>{t(`categories.${item.key}`)}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 }
 
+const PRIMARY_BLUE = '#1E88E5';
+const LIGHT_BLUE = '#E3F2FD';
+
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: 8, backgroundColor: '#FFFFFF' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  langPill: {
+    height: 40,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: LIGHT_BLUE,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    elevation: 3,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+  langPillText: { fontSize: 13, fontWeight: '700', color: PRIMARY_BLUE },
+  appName: { fontSize: 24, fontWeight: '700', color: PRIMARY_BLUE, letterSpacing: 0.5 },
+  appSubtitle: { marginTop: 4, fontSize: 13, color: '#6B6B6B' },
+  profile: { width: 40, height: 40, borderRadius: 20, backgroundColor: LIGHT_BLUE, alignItems: 'center', justifyContent: 'center', elevation: 3 },
+  profileInitials: { fontSize: 16, fontWeight: '700', color: PRIMARY_BLUE },
+  scrollContent: { paddingBottom: 32 },
+  planCard: { backgroundColor: LIGHT_BLUE, borderRadius: 20, padding: 20, marginBottom: 24 },
+  planTitle: { fontSize: 20, fontWeight: '700', color: PRIMARY_BLUE, marginBottom: 4 },
+  planSubtitle: { fontSize: 13, color: '#4F4F4F', marginBottom: 16 },
+  buttonRow: { flexDirection: 'row', gap: 10 },
+  planButton: { alignSelf: 'flex-start', backgroundColor: PRIMARY_BLUE, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10 },
+  planButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
+  mapButton: { alignSelf: 'flex-start', backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10, borderWidth: 1, borderColor: PRIMARY_BLUE },
+  mapButtonText: { color: PRIMARY_BLUE, fontSize: 14, fontWeight: '600' },
+  sectionHeader: { marginBottom: 12 },
+  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#1A1A1A' },
+  sectionSubtitle: { marginTop: 4, fontSize: 13, color: '#7A7A7A' },
+  categoriesGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14 },
+  categoryCard: { width: '48%', backgroundColor: '#F5F7FB', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 12, alignItems: 'flex-start' },
+  categoryEmoji: { fontSize: 24, marginBottom: 8 },
+  categoryLabel: { fontSize: 14, fontWeight: '600', color: '#2C2C2C' },
 });
