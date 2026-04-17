@@ -3,9 +3,12 @@ import { createClient } from '@supabase/supabase-js'
 import 'react-native-url-polyfill/auto'
 import { Platform } from 'react-native'
 
-const supabaseUrl = 'https://rfzedxvzycqzmnxcyrlu.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmemVkeHZ6eWNxem1ueGN5cmx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjEzNzEsImV4cCI6MjA4OTE5NzM3MX0.zDj-RvkDpTB4IO6NpPKzC6W6iSWs93-OblCHIree29s'
+import { createClient } from '@supabase/supabase-js';
 
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // Storage adapter cho cả web và native
 const storage = {
   getItem: async (key: string): Promise<string | null> => {
