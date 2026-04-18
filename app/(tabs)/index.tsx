@@ -58,9 +58,17 @@ export default function HomeScreen() {
                 onPress={() => router.push('/create-plan' as any)}>
                 <Text style={styles.planButtonText}>{t('home.createPlan')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.mapButton} activeOpacity={0.9} onPress={() => router.push('/map' as any)}>
-                <Text style={styles.mapButtonText}>🗺️ {t('home.map')}</Text>
+              <TouchableOpacity
+                style={styles.findBuddyButton}
+                activeOpacity={0.9}
+                onPress={() => router.push('/create-plan' as any)}>
+                <Text style={styles.findBuddyButtonText}>🤝 {t('home.findBuddy')}</Text>
               </TouchableOpacity>
+              {false && (
+                <TouchableOpacity style={styles.mapButton} activeOpacity={0.9} onPress={() => router.push('/map' as any)}>
+                  <Text style={styles.mapButtonText}>🗺️ {t('home.map')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -117,6 +125,8 @@ const styles = StyleSheet.create({
   buttonRow: { flexDirection: 'row', gap: 10 },
   planButton: { alignSelf: 'flex-start', backgroundColor: PRIMARY_BLUE, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10 },
   planButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
+  findBuddyButton: { alignSelf: 'flex-start', backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10, borderWidth: 1, borderColor: PRIMARY_BLUE },
+  findBuddyButtonText: { color: PRIMARY_BLUE, fontSize: 14, fontWeight: '600' },
   mapButton: { alignSelf: 'flex-start', backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10, borderWidth: 1, borderColor: PRIMARY_BLUE },
   mapButtonText: { color: PRIMARY_BLUE, fontSize: 14, fontWeight: '600' },
   sectionHeader: { marginBottom: 12 },

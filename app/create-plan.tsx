@@ -18,6 +18,11 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
 
+let DateTimePicker: any = null;
+if (Platform.OS !== 'web') {
+  DateTimePicker = require('@react-native-community/datetimepicker').default;
+}
+
 const CATEGORIES = [
   { key: 'cafe', emoji: '☕' },
   { key: 'gym', emoji: '🏋️' },
@@ -79,13 +84,16 @@ export default function CreatePlanScreen() {
 
   // Step 1 & 2 state
   const [category, setCategory] = useState('');
-  const [day, setDay] = useState('');
-  const [month, setMonth] = useState('');
-  const [year, setYear] = useState('');
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [errors, setErrors] = useState<{ category?: string; date?: string }>({});
   const date = useMemo(() => {
-    if (day.length !== 2 || month.length !== 2 || year.length !== 4) return '';
-    return `${day}/${month}/${year}`;
-  }, [day, month, year]);
+    if (!selectedDate) return '';
+    const d = selectedDate.getDate().toString().padStart(2, '0');
+    const m = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
+    const y = selectedDate.getFullYear().toString();
+    return `${d}/${m}/${y}`;
+  }, [selectedDate]);
   const [timeSlot, setTimeSlot] = useState('');
   const [collapsed, setCollapsed] = useState(false);
 
@@ -109,10 +117,6 @@ export default function CreatePlanScreen() {
   const [searchingPlace, setSearchingPlace] = useState(false);
   const placeSearchTimer = useRef<any>(null);
 
-  const dayRef = useRef<TextInput>(null);
-  const monthRef = useRef<TextInput>(null);
-  const yearRef = useRef<TextInput>(null);
-
   const categoryEmoji = CATEGORY_EMOJI[category] ?? '📍';
   const summaryTime = timeSlot ? timeSlot : t('createPlan.anyTime');
 
@@ -129,9 +133,11 @@ export default function CreatePlanScreen() {
   }, [showSuggestions]);
 
   const handleFindSuggestions = async () => {
-    if (!category) { Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorCategory')); return; }
-    if (!date) { Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorDate')); return; }
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(date)) { Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorInvalidDate')); return; }
+    const newErrors: { category?: string; date?: string } = {};
+    if (!category) newErrors.category = t('createPlan.errorCategory');
+    if (!date) newErrors.date = t('createPlan.errorDate');
+    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+    setErrors({});
     setLoadingSuggest(true);
     setShowSuggestions(true);
     const { data, error } = await supabase
@@ -232,8 +238,11 @@ export default function CreatePlanScreen() {
   };
 
   const openCreateModal = () => {
-    if (!category) { Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorCategory')); return; }
-    if (!date) { Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorDate')); return; }
+    const newErrors: { category?: string; date?: string } = {};
+    if (!category) newErrors.category = t('createPlan.errorCategory');
+    if (!date) newErrors.date = t('createPlan.errorDate');
+    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+    setErrors({});
     setShowCreateModal(true);
   };
 
@@ -279,12 +288,12 @@ export default function CreatePlanScreen() {
           <>
             {/* Category */}
             <Text style={styles.sectionTitle}>{t('createPlan.whatToDo')}</Text>
-            <View style={styles.categoriesGrid}>
+            <View style={[styles.categoriesGrid, !!errors.category && styles.fieldError]}>
               {CATEGORIES.map(item => (
                 <TouchableOpacity
                   key={item.key}
                   style={[styles.categoryCard, category === item.key && styles.categoryCardActive]}
-                  onPress={() => setCategory(item.key)}
+                  onPress={() => { setCategory(item.key); setErrors(e => ({ ...e, category: undefined })); }}
                 >
                   <Text style={styles.categoryEmoji}>{item.emoji}</Text>
                   <Text style={[styles.categoryLabel, category === item.key && styles.categoryLabelActive]}>
@@ -293,52 +302,70 @@ export default function CreatePlanScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            {!!errors.category && <Text style={styles.errorText}>⚠️ {errors.category}</Text>}
 
             {/* Date + Time */}
             <Text style={styles.sectionTitle}>{t('createPlan.when')}</Text>
             <Text style={styles.label}>{t('createPlan.date')}</Text>
-            <View style={styles.dateRow}>
-              <TextInput
-                ref={dayRef}
-                style={[styles.input, styles.dateInput]}
-                placeholder="DD"
-                value={day}
-                onChangeText={text => {
-                  const c = text.replace(/\D/g, '').slice(0, 2);
-                  setDay(c);
-                  if (c.length === 2) monthRef.current?.focus();
-                }}
-                keyboardType="numeric"
-                maxLength={2}
-                placeholderTextColor="#9CA3AF"
-              />
-              <Text style={styles.dateSep}>/</Text>
-              <TextInput
-                ref={monthRef}
-                style={[styles.input, styles.dateInput]}
-                placeholder="MM"
-                value={month}
-                onChangeText={text => {
-                  const c = text.replace(/\D/g, '').slice(0, 2);
-                  setMonth(c);
-                  if (c.length === 2) yearRef.current?.focus();
-                }}
-                keyboardType="numeric"
-                maxLength={2}
-                placeholderTextColor="#9CA3AF"
-              />
-              <Text style={styles.dateSep}>/</Text>
-              <TextInput
-                ref={yearRef}
-                style={[styles.input, styles.dateInputYear]}
-                placeholder="YYYY"
-                value={year}
-                onChangeText={text => setYear(text.replace(/\D/g, '').slice(0, 4))}
-                keyboardType="numeric"
-                maxLength={4}
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
+            {Platform.OS === 'web' ? (
+              <View>
+                {/* @ts-ignore */}
+                <input
+                  type="date"
+                  value={selectedDate ? selectedDate.toISOString().split('T')[0] : ''}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={(e: any) => {
+                    const val = e.target.value;
+                    if (val) {
+                      setSelectedDate(new Date(val + 'T12:00:00'));
+                      setErrors(prev => ({ ...prev, date: undefined }));
+                    }
+                  }}
+                  style={{
+                    border: errors.date ? '1.5px solid #DC2626' : '1px solid #E5E7EB',
+                    borderRadius: 12,
+                    padding: 14,
+                    fontSize: 15,
+                    color: '#1A1A1A',
+                    backgroundColor: errors.date ? '#FEF2F2' : '#F9FAFB',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  } as any}
+                />
+                {selectedDate && (
+                  <Text style={styles.dateFormatHint}>📅 {date}</Text>
+                )}
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={[styles.datePickerButton, !!errors.date && styles.datePickerButtonError]}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={[styles.datePickerText, !selectedDate && styles.datePickerPlaceholder]}>
+                    📅 {date || 'dd/mm/yyyy'}
+                  </Text>
+                </TouchableOpacity>
+                {showDatePicker && DateTimePicker && (
+                  <DateTimePicker
+                    value={selectedDate ?? new Date()}
+                    mode="date"
+                    minimumDate={new Date()}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(_event: any, d?: Date) => {
+                      setShowDatePicker(false);
+                      if (d) {
+                        setSelectedDate(d);
+                        setErrors(prev => ({ ...prev, date: undefined }));
+                      }
+                    }}
+                  />
+                )}
+              </>
+            )}
+            {!!errors.date && <Text style={styles.errorText}>⚠️ {errors.date}</Text>}
 
             <Text style={styles.label}>
               {t('createPlan.time')} <Text style={styles.optional}>{t('createPlan.timeOptional')}</Text>
@@ -584,10 +611,13 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8, marginTop: 14 },
   optional: { fontSize: 12, color: '#9CA3AF', fontWeight: '400' },
   input: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 14, fontSize: 15, color: '#1A1A1A', backgroundColor: '#F9FAFB' },
-  dateRow: { flexDirection: 'row', alignItems: 'center' },
-  dateSep: { marginHorizontal: 8, color: '#9CA3AF', fontWeight: '700', fontSize: 16 },
-  dateInput: { flex: 0, width: 72, textAlign: 'center' },
-  dateInputYear: { flex: 0, width: 110, textAlign: 'center' },
+  datePickerButton: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 14, backgroundColor: '#F9FAFB' },
+  datePickerButtonError: { borderColor: '#DC2626', backgroundColor: '#FEF2F2' },
+  datePickerText: { fontSize: 15, color: '#1A1A1A', fontWeight: '600' },
+  datePickerPlaceholder: { color: '#9CA3AF', fontWeight: '400' },
+  fieldError: { borderRadius: 14, borderWidth: 1.5, borderColor: '#DC2626' },
+  errorText: { color: '#DC2626', fontSize: 12, fontWeight: '500', marginTop: 6 },
+  dateFormatHint: { fontSize: 13, color: '#1E88E5', fontWeight: '600', marginTop: 6 },
   inputMultiline: { minHeight: 80 },
   timeSlotList: { marginBottom: 4 },
   timeSlot: { backgroundColor: '#F5F7FB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, marginRight: 8, borderWidth: 1.5, borderColor: 'transparent' },
