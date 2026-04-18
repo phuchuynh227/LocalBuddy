@@ -26,8 +26,13 @@ export default function ForgotPasswordScreen() {
       return;
     }
     setLoading(true);
+    const webRedirectTo =
+      Platform.OS === 'web'
+        ? `${globalThis.location?.origin ?? ''}/change-password`
+        : 'localbuddy://reset-password';
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'localbuddy://reset-password',
+      redirectTo: webRedirectTo,
     });
     if (error) {
       Alert.alert(t('writeReview.errorTitle'), error.message);

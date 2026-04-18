@@ -10,20 +10,20 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 const storage = {
   getItem: async (key: string): Promise<string | null> => {
     if (Platform.OS === 'web') {
-      return globalThis.sessionStorage?.getItem(key) ?? null
+      return globalThis.localStorage?.getItem(key) ?? null
     }
     return AsyncStorage.getItem(key)
   },
   setItem: async (key: string, value: string): Promise<void> => {
     if (Platform.OS === 'web') {
-      globalThis.sessionStorage?.setItem(key, value)
+      globalThis.localStorage?.setItem(key, value)
     } else {
       await AsyncStorage.setItem(key, value)
     }
   },
   removeItem: async (key: string): Promise<void> => {
     if (Platform.OS === 'web') {
-      globalThis.sessionStorage?.removeItem(key)
+      globalThis.localStorage?.removeItem(key)
     } else {
       await AsyncStorage.removeItem(key)
     }
@@ -35,6 +35,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    // Needed for web email links (reset/magic links). Native still uses deep links.
+    detectSessionInUrl: Platform.OS === 'web',
   },
 })

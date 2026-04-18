@@ -12,29 +12,49 @@ export default function RegisterScreen() {
   const router = useRouter() 
   const { t } = useLanguage()
 
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      globalThis.alert?.(`${title}\n${message}`)
+      return
+    }
+    Alert.alert(title, message)
+  }
+
   const handleRegister = async () => {
     if (!email || !password) {
-      Alert.alert(t('writeReview.errorTitle'), t('auth.missingInfo'))
+      showAlert(t('writeReview.errorTitle'), t('auth.missingInfo'))
       return
     }
     if (password !== confirmPassword) {
-      Alert.alert(t('writeReview.errorTitle'), t('auth.passwordMismatch'))
+      showAlert(t('writeReview.errorTitle'), t('auth.passwordMismatch'))
       return
     }
     if (password.length < 6) {
-      Alert.alert(t('writeReview.errorTitle'), t('auth.passwordTooShort'))
+      showAlert(t('writeReview.errorTitle'), t('auth.passwordTooShort'))
       return
     }
-    setLoading(true)
-    const { error } = await supabase.auth.signUp({ email, password })
-    if (error) {
-      Alert.alert(t('auth.registerFailed'), error.message)
-    } else {
+    try {
+      setLoading(true)
+      const { error } = await supabase.auth.signUp({ email, password })
+      if (error) {
+        showAlert(t('auth.registerFailed'), error.message)
+        return
+      }
+
+      if (Platform.OS === 'web') {
+        // web: avoid relying on Alert button callbacks
+        showAlert(t('auth.accountCreatedTitle'), t('auth.accountCreated'))
+        router.replace('/(auth)/login' as any)
+      } else {
         Alert.alert(t('auth.accountCreatedTitle'), t('auth.accountCreated'), [
-            { text: t('common.ok'), onPress: () => router.replace('/(auth)/login' as any) }
+          { text: t('common.ok'), onPress: () => router.replace('/(auth)/login' as any) }
         ])
+      }
+    } catch (error: any) {
+      showAlert(t('auth.registerFailed'), error?.message ?? 'Unknown error')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (

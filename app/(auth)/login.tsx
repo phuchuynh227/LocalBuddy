@@ -10,19 +10,33 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false)
   const { t } = useLanguage()
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert(t('writeReview.errorTitle'), t('auth.missingEmailPassword'))
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      globalThis.alert?.(`${title}\n${message}`)
       return
     }
-    setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      Alert.alert(t('auth.loginFailed'), error.message)
-    } else {
-      router.replace('/(tabs)/' as any)
+    Alert.alert(title, message)
+  }
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      showAlert(t('writeReview.errorTitle'), t('auth.missingEmailPassword'))
+      return
     }
-    setLoading(false)
+    try {
+      setLoading(true)
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) {
+        showAlert(t('auth.loginFailed'), error.message)
+        return
+      }
+      // Route via root so AuthContext resolves session first on web/native.
+      router.replace('/' as any)
+    } catch (error: any) {
+      showAlert(t('auth.loginFailed'), error?.message ?? 'Unknown error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
