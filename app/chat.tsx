@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { supabase } from '../lib/supabase';
 
 type Message = {
@@ -26,6 +27,7 @@ type Message = {
 export default function ChatScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { markChatRead } = useNotifications();
   const { matchUserId, planTitle } = useLocalSearchParams<{
     matchUserId: string;
     planTitle: string;
@@ -71,6 +73,7 @@ export default function ChatScreen() {
 
       setMatchId(data.id);
       await fetchMessages(data.id);
+      await markChatRead(data.id);
       if (!active) return;
 
       channel = supabase
@@ -88,6 +91,7 @@ export default function ChatScreen() {
               if (prev.find((message) => message.id === payload.new.id)) return prev;
               return [...prev, payload.new as Message];
             });
+            markChatRead(data.id);
             setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
           }
         )
@@ -102,7 +106,7 @@ export default function ChatScreen() {
       active = false;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [matchUserId, user?.id]);
+  }, [markChatRead, matchUserId, user?.id]);
 
   const handleSend = async () => {
     if (!text.trim() || !matchId) return;

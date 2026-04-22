@@ -3,6 +3,7 @@ import React from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
 import { AuthProvider } from '../context/AuthContext'
 import { LanguageProvider } from '../context/LanguageContext'
+import { NotificationProvider } from '../context/NotificationContext'
 
 function AppFrame({ children }: { children: React.ReactNode }) {
   if (Platform.OS !== 'web') return <>{children}</>
@@ -18,9 +19,11 @@ export default function RootLayout() {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <AppFrame>
-          <Stack screenOptions={{ headerShown: false }} />
-        </AppFrame>
+        <NotificationProvider>
+          <AppFrame>
+            <Stack screenOptions={{ headerShown: false }} />
+          </AppFrame>
+        </NotificationProvider>
       </AuthProvider>
     </LanguageProvider>
   )
