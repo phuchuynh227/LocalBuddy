@@ -1,3 +1,4 @@
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
@@ -13,12 +14,12 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useNotifications } from '../../context/NotificationContext';
 
 const CATEGORIES = [
-  { key: 'cafe', emoji: '\u2615' },
-  { key: 'gym', emoji: '\u{1F3CB}\uFE0F' },
-  { key: 'movies', emoji: '\u{1F3AC}' },
-  { key: 'park', emoji: '\u{1F333}' },
-  { key: 'food', emoji: '\u{1F37D}\uFE0F' },
-  { key: 'study', emoji: '\u{1F4DA}' },
+  { key: 'cafe', iconSet: 'Ionicons', iconName: 'cafe-outline' },
+  { key: 'gym', iconSet: 'MaterialCommunityIcons', iconName: 'dumbbell' },
+  { key: 'movies', iconSet: 'Ionicons', iconName: 'film-outline' },
+  { key: 'park', iconSet: 'MaterialCommunityIcons', iconName: 'tree-outline' },
+  { key: 'food', iconSet: 'Ionicons', iconName: 'restaurant-outline' },
+  { key: 'study', iconSet: 'Ionicons', iconName: 'book-outline' },
 ];
 
 export default function HomeScreen() {
@@ -41,7 +42,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/notifications' as any)}
               activeOpacity={0.9}
             >
-              <Text style={styles.bellText}>{'\u{1F514}'}</Text>
+              <Ionicons name="notifications-outline" size={20} color={PRIMARY_BLUE} />
               {unreadCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
@@ -94,7 +95,21 @@ export default function HomeScreen() {
                 activeOpacity={0.9}
                 onPress={() => router.push(`/places?category=${item.key}` as any)}
               >
-                <Text style={styles.categoryEmoji}>{item.emoji}</Text>
+                {item.iconSet === 'MaterialCommunityIcons' ? (
+                  <MaterialCommunityIcons
+                    name={item.iconName as any}
+                    size={24}
+                    color={PRIMARY_BLUE}
+                    style={styles.categoryIcon}
+                  />
+                ) : (
+                  <Ionicons
+                    name={item.iconName as any}
+                    size={24}
+                    color={PRIMARY_BLUE}
+                    style={styles.categoryIcon}
+                  />
+                )}
                 <Text style={styles.categoryLabel}>{t(`categories.${item.key}`)}</Text>
               </TouchableOpacity>
             ))}
@@ -122,7 +137,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
-  bellText: { fontSize: 18, color: PRIMARY_BLUE },
   badge: {
     position: 'absolute',
     top: -4,
@@ -164,6 +178,6 @@ const styles = StyleSheet.create({
   sectionSubtitle: { marginTop: 4, fontSize: 13, color: '#7A7A7A' },
   categoriesGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14 },
   categoryCard: { width: '48%', backgroundColor: '#F5F7FB', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 12, alignItems: 'flex-start' },
-  categoryEmoji: { fontSize: 24, marginBottom: 8 },
+  categoryIcon: { marginBottom: 8 },
   categoryLabel: { fontSize: 14, fontWeight: '600', color: '#2C2C2C' },
 });

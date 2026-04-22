@@ -1,3 +1,4 @@
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import {
@@ -9,19 +10,20 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useLanguage } from '../context/LanguageContext';
 import { useNotifications } from '../context/NotificationContext';
-
-const TYPE_ICON: Record<string, string> = {
-  approval: '\u23F3',
-  cancelled: '\u2715',
-  message: '\u2709',
-};
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const { language } = useLanguage();
   const { notifications, unreadCount, loading, markAllRead, refreshNotifications } = useNotifications();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshNotifications();
+    }, [refreshNotifications]),
+  );
 
   const labels = useMemo(() => {
     if (language === 'vn') {
@@ -48,7 +50,15 @@ export default function NotificationsScreen() {
       onPress={() => router.push(item.actionHref as any)}
     >
       <View style={styles.iconWrap}>
-        <Text style={styles.iconText}>{TYPE_ICON[item.type] ?? '!'}</Text>
+        {item.type === 'approval' && (
+          <Ionicons name="hourglass-outline" size={18} color="#1E88E5" />
+        )}
+        {item.type === 'cancelled' && (
+          <Ionicons name="close-circle-outline" size={18} color="#1E88E5" />
+        )}
+        {item.type === 'message' && (
+          <MaterialCommunityIcons name="message-text-outline" size={18} color="#1E88E5" />
+        )}
       </View>
       <View style={styles.content}>
         <View style={styles.topRow}>
@@ -67,7 +77,7 @@ export default function NotificationsScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>{'<'}</Text>
+          <Ionicons name="arrow-back" size={18} color="#1E88E5" />
         </TouchableOpacity>
         <View style={styles.headerText}>
           <Text style={styles.title}>{labels.title}</Text>
@@ -90,7 +100,12 @@ export default function NotificationsScreen() {
           contentContainerStyle={notifications.length === 0 ? styles.emptyContainer : styles.list}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={styles.emptyEmoji}>{'\u{1F514}'}</Text>
+              <Ionicons
+                name="notifications-off-outline"
+                size={32}
+                color="#9CA3AF"
+                style={styles.emptyIcon}
+              />
               <Text style={styles.emptyTitle}>{labels.empty}</Text>
               <Text style={styles.emptySubtitle}>{labels.emptySubtitle}</Text>
             </View>
@@ -120,7 +135,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  backText: { fontSize: 18, color: '#1E88E5', fontWeight: '700' },
   headerText: { flex: 1 },
   title: { fontSize: 20, fontWeight: '700', color: '#1A1A1A' },
   subtitle: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
@@ -128,7 +142,7 @@ const styles = StyleSheet.create({
   list: { padding: 20, paddingBottom: 32 },
   emptyContainer: { flexGrow: 1, padding: 20 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
-  emptyEmoji: { fontSize: 32, marginBottom: 12, color: '#9CA3AF' },
+  emptyIcon: { marginBottom: 12 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: '#1A1A1A', marginBottom: 8 },
   emptySubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center' },
   card: {
@@ -150,7 +164,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  iconText: { fontSize: 18, color: '#1E88E5', fontWeight: '700' },
   content: { flex: 1 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   itemTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A', flex: 1, marginRight: 8 },

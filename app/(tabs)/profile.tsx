@@ -1,3 +1,4 @@
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
@@ -12,14 +13,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNotifications } from '../../context/NotificationContext';
 
-const ICONS = {
-  plans: '\u{1F4CB}',
-  matches: '\u{1F91D}',
-  reviews: '\u270D\uFE0F',
-  notifications: '\u{1F514}',
-  password: '\u{1F512}',
-};
-
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
@@ -33,6 +26,22 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.topBar}>
+          <View />
+          <TouchableOpacity
+            style={styles.topBellButton}
+            onPress={() => router.push('/notifications' as any)}
+            activeOpacity={0.9}
+          >
+            <Ionicons name="notifications-outline" size={20} color={PRIMARY_BLUE} />
+            {unreadCount > 0 && (
+              <View style={styles.topBadge}>
+                <Text style={styles.topBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.avatarSection}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
@@ -50,17 +59,22 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('profile.activity')}</Text>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/my-plans' as any)}>
-            <Text style={styles.menuIcon}>{ICONS.plans}</Text>
+            <MaterialCommunityIcons
+              name="clipboard-text-outline"
+              size={20}
+              color={PRIMARY_BLUE}
+              style={styles.menuIcon}
+            />
             <Text style={styles.menuLabel}>{t('myPlans.title')}</Text>
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/my-matches' as any)}>
-            <Text style={styles.menuIcon}>{ICONS.matches}</Text>
+            <Ionicons name="people-outline" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
             <Text style={styles.menuLabel}>{t('profile.myMatches')}</Text>
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/my-reviews' as any)}>
-            <Text style={styles.menuIcon}>{ICONS.reviews}</Text>
+            <Ionicons name="create-outline" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
             <Text style={styles.menuLabel}>{t('profile.myReviews')}</Text>
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
@@ -69,7 +83,7 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('profile.settings')}</Text>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/notifications' as any)}>
-            <Text style={styles.menuIcon}>{ICONS.notifications}</Text>
+            <Ionicons name="notifications-outline" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
             <Text style={styles.menuLabel}>{t('profile.notifications')}</Text>
             {unreadCount > 0 && (
               <View style={styles.badge}>
@@ -79,7 +93,7 @@ export default function ProfileScreen() {
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/change-password' as any)}>
-            <Text style={styles.menuIcon}>{ICONS.password}</Text>
+            <Ionicons name="lock-closed-outline" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
             <Text style={styles.menuLabel}>{t('profile.changePassword')}</Text>
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
@@ -99,15 +113,69 @@ const LIGHT_BLUE = '#E3F2FD';
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
   scrollContent: { paddingBottom: 40 },
+  topBar: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  topBellButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: LIGHT_BLUE,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    marginLeft: 'auto',
+  },
+  topBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  topBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFFFFF' },
   avatarSection: { alignItems: 'center', paddingVertical: 32, backgroundColor: LIGHT_BLUE },
-  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: PRIMARY_BLUE, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: PRIMARY_BLUE,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   avatarText: { fontSize: 32, fontWeight: '700', color: '#FFFFFF' },
   email: { fontSize: 16, fontWeight: '600', color: '#1A1A1A', marginBottom: 4 },
   joinDate: { fontSize: 13, color: '#6B7280' },
   section: { marginTop: 24, paddingHorizontal: 20 },
-  sectionTitle: { fontSize: 13, fontWeight: '600', color: '#9CA3AF', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: '#E5E7EB' },
-  menuIcon: { fontSize: 20, marginRight: 12, width: 24, textAlign: 'center' },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  menuIcon: { marginRight: 12, width: 24, textAlign: 'center' },
   menuLabel: { flex: 1, fontSize: 15, color: '#1A1A1A', fontWeight: '500' },
   menuArrow: { fontSize: 16, color: '#9CA3AF' },
   badge: {
@@ -121,6 +189,13 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   badgeText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF' },
-  logoutButton: { marginHorizontal: 20, marginTop: 32, backgroundColor: '#FEE2E2', borderRadius: 12, padding: 16, alignItems: 'center' },
+  logoutButton: {
+    marginHorizontal: 20,
+    marginTop: 32,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
   logoutText: { fontSize: 15, fontWeight: '600', color: '#DC2626' },
 });
