@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -13,9 +13,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { useNotifications } from '../context/NotificationContext';
 
 const TYPE_ICON: Record<string, string> = {
-  approval: '...',
-  cancelled: 'x',
-  message: '>',
+  approval: '\u23F3',
+  cancelled: '\u2715',
+  message: '\u2709',
 };
 
 export default function NotificationsScreen() {
@@ -40,10 +40,6 @@ export default function NotificationsScreen() {
       markRead: 'Mark read',
     };
   }, [language]);
-
-  useEffect(() => {
-    markAllRead();
-  }, [markAllRead]);
 
   const renderItem = ({ item }: { item: typeof notifications[number] }) => (
     <TouchableOpacity
@@ -94,7 +90,7 @@ export default function NotificationsScreen() {
           contentContainerStyle={notifications.length === 0 ? styles.emptyContainer : styles.list}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={styles.emptyEmoji}>...</Text>
+              <Text style={styles.emptyEmoji}>{'\u{1F514}'}</Text>
               <Text style={styles.emptyTitle}>{labels.empty}</Text>
               <Text style={styles.emptySubtitle}>{labels.emptySubtitle}</Text>
             </View>

@@ -10,20 +10,22 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { useNotifications } from '../../context/NotificationContext';
 
 const CATEGORIES = [
-  { key: 'cafe', emoji: '☕' },
-  { key: 'gym', emoji: '🏋️' },
-  { key: 'movies', emoji: '🎬' },
-  { key: 'park', emoji: '🌳' },
-  { key: 'food', emoji: '🍽️' },
-  { key: 'study', emoji: '📚' },
+  { key: 'cafe', emoji: '\u2615' },
+  { key: 'gym', emoji: '\u{1F3CB}\uFE0F' },
+  { key: 'movies', emoji: '\u{1F3AC}' },
+  { key: 'park', emoji: '\u{1F333}' },
+  { key: 'food', emoji: '\u{1F37D}\uFE0F' },
+  { key: 'study', emoji: '\u{1F4DA}' },
 ];
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
   const { language, toggleLanguage, t } = useLanguage();
+  const { unreadCount } = useNotifications();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -34,9 +36,21 @@ export default function HomeScreen() {
             <Text style={styles.appSubtitle}>{t('home.subtitle')}</Text>
           </View>
           <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.bellButton}
+              onPress={() => router.push('/notifications' as any)}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.bellText}>{'\u{1F514}'}</Text>
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
             <TouchableOpacity style={styles.langPill} onPress={toggleLanguage} activeOpacity={0.9}>
               <Text style={styles.langPillText}>
-                {language === 'en' ? '🇺🇸 EN' : '🇻🇳 VN'}
+                {language === 'en' ? 'EN' : 'VN'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.profile} onPress={signOut} activeOpacity={0.9}>
@@ -62,13 +76,8 @@ export default function HomeScreen() {
                 style={styles.findBuddyButton}
                 activeOpacity={0.9}
                 onPress={() => router.push('/create-plan' as any)}>
-                <Text style={styles.findBuddyButtonText}>🤝 {t('home.findBuddy')}</Text>
+                <Text style={styles.findBuddyButtonText}>{t('home.findBuddy')}</Text>
               </TouchableOpacity>
-              {false && (
-                <TouchableOpacity style={styles.mapButton} activeOpacity={0.9} onPress={() => router.push('/map' as any)}>
-                  <Text style={styles.mapButtonText}>🗺️ {t('home.map')}</Text>
-                </TouchableOpacity>
-              )}
             </View>
           </View>
 
@@ -104,6 +113,29 @@ const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20, paddingTop: 8, backgroundColor: '#FFFFFF' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  bellButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: LIGHT_BLUE,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  bellText: { fontSize: 18, color: PRIMARY_BLUE },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: { fontSize: 10, fontWeight: '700', color: '#FFFFFF' },
   langPill: {
     height: 40,
     paddingHorizontal: 12,
@@ -127,8 +159,6 @@ const styles = StyleSheet.create({
   planButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
   findBuddyButton: { alignSelf: 'flex-start', backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10, borderWidth: 1, borderColor: PRIMARY_BLUE },
   findBuddyButtonText: { color: PRIMARY_BLUE, fontSize: 14, fontWeight: '600' },
-  mapButton: { alignSelf: 'flex-start', backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10, borderWidth: 1, borderColor: PRIMARY_BLUE },
-  mapButtonText: { color: PRIMARY_BLUE, fontSize: 14, fontWeight: '600' },
   sectionHeader: { marginBottom: 12 },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: '#1A1A1A' },
   sectionSubtitle: { marginTop: 4, fontSize: 13, color: '#7A7A7A' },

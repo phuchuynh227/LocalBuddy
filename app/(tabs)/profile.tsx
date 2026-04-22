@@ -12,6 +12,14 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNotifications } from '../../context/NotificationContext';
 
+const ICONS = {
+  plans: '\u{1F4CB}',
+  matches: '\u{1F91D}',
+  reviews: '\u270D\uFE0F',
+  notifications: '\u{1F514}',
+  password: '\u{1F512}',
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
@@ -42,17 +50,17 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('profile.activity')}</Text>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/my-plans' as any)}>
-            <Text style={styles.menuIcon}>...</Text>
+            <Text style={styles.menuIcon}>{ICONS.plans}</Text>
             <Text style={styles.menuLabel}>{t('myPlans.title')}</Text>
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/my-matches' as any)}>
-            <Text style={styles.menuIcon}>...</Text>
+            <Text style={styles.menuIcon}>{ICONS.matches}</Text>
             <Text style={styles.menuLabel}>{t('profile.myMatches')}</Text>
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/my-reviews' as any)}>
-            <Text style={styles.menuIcon}>...</Text>
+            <Text style={styles.menuIcon}>{ICONS.reviews}</Text>
             <Text style={styles.menuLabel}>{t('profile.myReviews')}</Text>
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
@@ -61,7 +69,7 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('profile.settings')}</Text>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/notifications' as any)}>
-            <Text style={styles.menuIcon}>!</Text>
+            <Text style={styles.menuIcon}>{ICONS.notifications}</Text>
             <Text style={styles.menuLabel}>{t('profile.notifications')}</Text>
             {unreadCount > 0 && (
               <View style={styles.badge}>
@@ -71,7 +79,7 @@ export default function ProfileScreen() {
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/change-password' as any)}>
-            <Text style={styles.menuIcon}>*</Text>
+            <Text style={styles.menuIcon}>{ICONS.password}</Text>
             <Text style={styles.menuLabel}>{t('profile.changePassword')}</Text>
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
@@ -99,7 +107,7 @@ const styles = StyleSheet.create({
   section: { marginTop: 24, paddingHorizontal: 20 },
   sectionTitle: { fontSize: 13, fontWeight: '600', color: '#9CA3AF', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: '#E5E7EB' },
-  menuIcon: { fontSize: 20, marginRight: 12, width: 20, textAlign: 'center' },
+  menuIcon: { fontSize: 20, marginRight: 12, width: 24, textAlign: 'center' },
   menuLabel: { flex: 1, fontSize: 15, color: '#1A1A1A', fontWeight: '500' },
   menuArrow: { fontSize: 16, color: '#9CA3AF' },
   badge: {

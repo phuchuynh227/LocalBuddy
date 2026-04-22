@@ -122,100 +122,104 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
 
     setLoading(true);
+    try {
+      const [hostPlansRes, requesterRes, matchesRes] = await Promise.all([
+        supabase
+          .from('plans')
+          .select('id, title, plan_requests(id, requester_id, status, created_at)')
+          .eq('host_id', user.id),
+        supabase
+          .from('plan_requests')
+          .select('id, created_at, status, plans(id, title, status)')
+          .eq('requester_id', user.id)
+          .in('status', ['pending', 'accepted']),
+        supabase
+          .from('matches')
+          .select('id, user1_id, user2_id, plans(title)')
+          .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`),
+      ]);
 
-    const [hostPlansRes, requesterRes, matchesRes] = await Promise.all([
-      supabase
-        .from('plans')
-        .select('id, title, plan_requests(id, requester_id, status, created_at)')
-        .eq('host_id', user.id),
-      supabase
-        .from('plan_requests')
-        .select('id, created_at, status, plans(id, title, status)')
-        .eq('requester_id', user.id)
-        .in('status', ['pending', 'accepted']),
-      supabase
-        .from('matches')
-        .select('id, user1_id, user2_id, plans(title)')
-        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`),
-    ]);
+      const nextNotifications: AppNotification[] = [];
 
-    const nextNotifications: AppNotification[] = [];
+      if (hostPlansRes.data) {
+        for (const plan of hostPlansRes.data as any[]) {
+          for (const request of plan.plan_requests ?? []) {
+            if (request.status !== 'pending') continue;
+            const id = `approval-${request.id}`;
+            nextNotifications.push({
+              id,
+              type: 'approval',
+              title: labels.approvalTitle,
+              body: labels.approvalBody(plan.title ?? 'Plan', request.requester_id),
+              createdAt: request.created_at,
+              actionHref: '/my-plans',
+              read: seenIds.includes(id),
+            });
+          }
+        }
+      }
 
-    if (hostPlansRes.data) {
-      for (const plan of hostPlansRes.data as any[]) {
-        for (const request of plan.plan_requests ?? []) {
-          if (request.status !== 'pending') continue;
-          const id = `approval-${request.id}`;
+      if (requesterRes.data) {
+        for (const request of requesterRes.data as any[]) {
+          if (request.plans?.status !== 'cancelled') continue;
+          const id = `cancelled-${request.id}`;
           nextNotifications.push({
             id,
-            type: 'approval',
-            title: labels.approvalTitle,
-            body: labels.approvalBody(plan.title ?? 'Plan', request.requester_id),
+            type: 'cancelled',
+            title: labels.cancelledTitle,
+            body: labels.cancelledBody(request.plans?.title ?? 'Plan'),
             createdAt: request.created_at,
-            actionHref: '/my-plans',
+            actionHref: '/my-matches',
             read: seenIds.includes(id),
           });
         }
       }
-    }
 
-    if (requesterRes.data) {
-      for (const request of requesterRes.data as any[]) {
-        if (request.plans?.status !== 'cancelled') continue;
-        const id = `cancelled-${request.id}`;
-        nextNotifications.push({
-          id,
-          type: 'cancelled',
-          title: labels.cancelledTitle,
-          body: labels.cancelledBody(request.plans?.title ?? 'Plan'),
-          createdAt: request.created_at,
-          actionHref: '/my-matches',
-          read: seenIds.includes(id),
-        });
-      }
-    }
+      const matches = (matchesRes.data as MatchRow[] | null) ?? [];
+      if (matches.length > 0) {
+        const matchIds = matches.map((match) => match.id);
+        const { data: messages } = await supabase
+          .from('messages')
+          .select('id, match_id, sender_id, content, created_at')
+          .in('match_id', matchIds)
+          .neq('sender_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(200);
 
-    const matches = (matchesRes.data as MatchRow[] | null) ?? [];
-    if (matches.length > 0) {
-      const matchIds = matches.map((match) => match.id);
-      const { data: messages } = await supabase
-        .from('messages')
-        .select('id, match_id, sender_id, content, created_at')
-        .in('match_id', matchIds)
-        .neq('sender_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(200);
-
-      if (messages) {
-        const latestPerMatch = new Map<string, MessageRow>();
-        for (const message of messages as MessageRow[]) {
-          if (!latestPerMatch.has(message.match_id)) {
-            latestPerMatch.set(message.match_id, message);
+        if (messages) {
+          const latestPerMatch = new Map<string, MessageRow>();
+          for (const message of messages as MessageRow[]) {
+            if (!latestPerMatch.has(message.match_id)) {
+              latestPerMatch.set(message.match_id, message);
+            }
           }
-        }
 
-        latestPerMatch.forEach((message, matchId) => {
-          const lastReadAt = chatLastRead[matchId];
-          const isUnread = !lastReadAt || new Date(message.created_at).getTime() > new Date(lastReadAt).getTime();
-          const match = matches.find((item) => item.id === matchId);
-          const planTitle = match?.plans?.title ?? 'Chat';
-          const id = `message-${matchId}-${message.id}`;
-          nextNotifications.push({
-            id,
-            type: 'message',
-            title: labels.messageTitle,
-            body: labels.messageBody(planTitle, message.content),
-            createdAt: message.created_at,
-            actionHref: `/chat?matchUserId=${match ? (match.user1_id === user.id ? match.user2_id : match.user1_id) : ''}&planTitle=${encodeURIComponent(planTitle)}`,
-            read: !isUnread || seenIds.includes(id),
+          latestPerMatch.forEach((message, matchId) => {
+            const lastReadAt = chatLastRead[matchId];
+            const isUnread = !lastReadAt || new Date(message.created_at).getTime() > new Date(lastReadAt).getTime();
+            const match = matches.find((item) => item.id === matchId);
+            const planTitle = match?.plans?.title ?? 'Chat';
+            const id = `message-${matchId}-${message.id}`;
+            nextNotifications.push({
+              id,
+              type: 'message',
+              title: labels.messageTitle,
+              body: labels.messageBody(planTitle, message.content),
+              createdAt: message.created_at,
+              actionHref: `/chat?matchUserId=${match ? (match.user1_id === user.id ? match.user2_id : match.user1_id) : ''}&planTitle=${encodeURIComponent(planTitle)}`,
+              read: !isUnread || seenIds.includes(id),
+            });
           });
-        });
+        }
       }
-    }
 
-    nextNotifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    setNotifications(nextNotifications);
-    setLoading(false);
+      nextNotifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setNotifications(nextNotifications);
+    } catch {
+      setNotifications([]);
+    } finally {
+      setLoading(false);
+    }
   }, [chatLastRead, labels, seenIds, user?.id]);
 
   useEffect(() => {
