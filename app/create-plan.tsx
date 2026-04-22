@@ -1,3 +1,4 @@
+import { Entypo } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -18,12 +19,12 @@ import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
 
 const CATEGORIES = [
-  { key: 'cafe', emoji: '\u2615' },
-  { key: 'gym', emoji: '\u{1F3CB}\uFE0F' },
-  { key: 'movies', emoji: '\u{1F3AC}' },
-  { key: 'park', emoji: '\u{1F333}' },
-  { key: 'food', emoji: '\u{1F37D}\uFE0F' },
-  { key: 'study', emoji: '\u{1F4DA}' },
+  { key: 'cafe', icon: 'cup' },
+  { key: 'gym', icon: 'sports-club' },
+  { key: 'movies', icon: 'clapperboard' },
+  { key: 'park', icon: 'tree' },
+  { key: 'food', icon: 'bowl' },
+  { key: 'study', icon: 'open-book' },
 ];
 
 const TIME_SLOTS = [
@@ -32,9 +33,13 @@ const TIME_SLOTS = [
   '19:00', '20:00', '21:00',
 ];
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  cafe: '\u2615', gym: '\u{1F3CB}\uFE0F', movies: '\u{1F3AC}',
-  park: '\u{1F333}', food: '\u{1F37D}\uFE0F', study: '\u{1F4DA}',
+const CATEGORY_ICON: Record<string, string> = {
+  cafe: 'cup',
+  gym: 'sports-club',
+  movies: 'clapperboard',
+  park: 'tree',
+  food: 'bowl',
+  study: 'open-book',
 };
 
 type Plan = {
@@ -51,16 +56,55 @@ type Plan = {
   joined_count?: number;
 };
 
-function calcMatch(plan: any, category: string, timeSlot: string, date: string): { match: boolean; reasons: string[] } {
+type DateOption = {
+  iso: string;
+  dayNumber: string;
+  monthLabel: string;
+  weekdayLabel: string;
+  shortLabel: string;
+};
+
+type CalendarCell = {
+  iso: string;
+  dayNumber: string;
+  inMonth: boolean;
+  disabled: boolean;
+};
+
+function toDateOption(date: Date, language: 'en' | 'vn'): DateOption {
+  return {
+    iso: date.toISOString().split('T')[0],
+    dayNumber: date.getDate().toString().padStart(2, '0'),
+    monthLabel: date.toLocaleDateString(language === 'vn' ? 'vi-VN' : 'en-US', { month: 'short' }),
+    weekdayLabel: date.toLocaleDateString(language === 'vn' ? 'vi-VN' : 'en-US', { weekday: 'short' }),
+    shortLabel: date.toLocaleDateString(language === 'vn' ? 'vi-VN' : 'en-US', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }),
+  };
+}
+
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 12, 0, 0, 0);
+}
+
+function addMonths(date: Date, amount: number) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1, 12, 0, 0, 0);
+}
+
+function toIsoDate(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0).toISOString().split('T')[0];
+}
+
+function calcMatch(plan: any, category: string, timeSlot: string, selectedDateIso: string): { match: boolean; reasons: string[] } {
   const reasons: string[] = [];
   if (plan.category !== category) return { match: false, reasons: [] };
   reasons.push('activity');
 
-  if (date) {
-    const [day, month, year] = date.split('/');
-    const myDate = `${year}-${month}-${day}`;
+  if (selectedDateIso) {
     const planDate = new Date(plan.scheduled_at).toISOString().split('T')[0];
-    if (planDate !== myDate) return { match: false, reasons: [] };
+    if (planDate !== selectedDateIso) return { match: false, reasons: [] };
     reasons.push('date');
   }
 
@@ -74,37 +118,15 @@ function calcMatch(plan: any, category: string, timeSlot: string, date: string):
   return { match: true, reasons };
 }
 
-function parsePlanDate(day: string, month: string, year: string) {
-  if (!day || !month || !year) return null;
-  if (!/^\d{2}$/.test(day) || !/^\d{2}$/.test(month) || !/^\d{4}$/.test(year)) return null;
-
-  const parsed = new Date(`${year}-${month}-${day}T12:00:00`);
-  if (Number.isNaN(parsed.getTime())) return null;
-  if (
-    parsed.getDate() !== Number(day) ||
-    parsed.getMonth() + 1 !== Number(month) ||
-    parsed.getFullYear() !== Number(year)
-  ) {
-    return null;
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (parsed < today) return null;
-
-  return parsed;
-}
-
 export default function CreatePlanScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
 
   const [category, setCategory] = useState('');
   const [errors, setErrors] = useState<{ category?: string; date?: string }>({});
-  const [day, setDay] = useState('');
-  const [month, setMonth] = useState('');
-  const [year, setYear] = useState('');
+  const [selectedDateIso, setSelectedDateIso] = useState('');
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [timeSlot, setTimeSlot] = useState('');
   const [collapsed, setCollapsed] = useState(false);
 
@@ -124,17 +146,64 @@ export default function CreatePlanScreen() {
   const [placeSuggestions, setPlaceSuggestions] = useState<any[]>([]);
   const [searchingPlace, setSearchingPlace] = useState(false);
   const placeSearchTimer = useRef<any>(null);
-  const dayRef = useRef<TextInput>(null);
-  const monthRef = useRef<TextInput>(null);
-  const yearRef = useRef<TextInput>(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
 
-  const date = useMemo(() => {
-    if (!day || !month || !year) return '';
-    return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
-  }, [day, month, year]);
+  const dateOptions = useMemo(() => {
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    return Array.from({ length: 14 }, (_, index) => {
+      const nextDate = new Date(today);
+      nextDate.setDate(today.getDate() + index);
+      return toDateOption(nextDate, language);
+    });
+  }, [language]);
 
-  const categoryEmoji = CATEGORY_EMOJI[category] ?? '\u{1F4CD}';
+  const selectedDate = useMemo(
+    () => dateOptions.find((option) => option.iso === selectedDateIso) ?? null,
+    [dateOptions, selectedDateIso],
+  );
+
+  const calendarMonthLabel = useMemo(
+    () => calendarMonth.toLocaleDateString(language === 'vn' ? 'vi-VN' : 'en-US', {
+      month: 'long',
+      year: 'numeric',
+    }),
+    [calendarMonth, language],
+  );
+
+  const weekdayHeaders = useMemo(() => {
+    const base = new Date(2026, 3, 20, 12, 0, 0, 0);
+    return Array.from({ length: 7 }, (_, index) => {
+      const next = new Date(base);
+      next.setDate(base.getDate() + index);
+      return next.toLocaleDateString(language === 'vn' ? 'vi-VN' : 'en-US', { weekday: 'narrow' });
+    });
+  }, [language]);
+
+  const calendarDays = useMemo(() => {
+    const monthStart = startOfMonth(calendarMonth);
+    const gridStart = new Date(monthStart);
+    gridStart.setDate(monthStart.getDate() - monthStart.getDay());
+
+    const todayIso = toIsoDate(new Date());
+    return Array.from({ length: 42 }, (_, index) => {
+      const cellDate = new Date(gridStart);
+      cellDate.setDate(gridStart.getDate() + index);
+      const iso = toIsoDate(cellDate);
+      return {
+        iso,
+        dayNumber: cellDate.getDate().toString(),
+        inMonth: cellDate.getMonth() === calendarMonth.getMonth(),
+        disabled: iso < todayIso,
+      };
+    }) as CalendarCell[];
+  }, [calendarMonth]);
+
+  const categoryIcon = CATEGORY_ICON[category] ?? 'location-pin';
   const summaryTime = timeSlot || t('createPlan.anyTime');
+  const editLabel = language === 'vn' ? 'Sua' : 'Edit';
+  const openCalendarLabel = language === 'vn' ? 'Mo lich' : 'Open calendar';
+  const chooseAnotherDateLabel = language === 'vn' ? 'Chon ngay khac' : 'Choose another date';
 
   const reasonLabel = (key: string) => {
     if (key === 'activity') return t('createPlan.reasonActivity');
@@ -157,8 +226,7 @@ export default function CreatePlanScreen() {
   const handleFindSuggestions = async () => {
     const newErrors: { category?: string; date?: string } = {};
     if (!category) newErrors.category = t('createPlan.errorCategory');
-    if (!date) newErrors.date = t('createPlan.errorDate');
-    else if (!parsePlanDate(day, month, year)) newErrors.date = t('createPlan.errorInvalidDate');
+    if (!selectedDateIso) newErrors.date = t('createPlan.errorDate');
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -178,7 +246,7 @@ export default function CreatePlanScreen() {
     if (!error && data) {
       const matched = data
         .map((plan) => {
-          const { match, reasons } = calcMatch(plan, category, timeSlot, date);
+          const { match, reasons } = calcMatch(plan, category, timeSlot, selectedDateIso);
           if (!match) return null;
           const joinedCount = (plan.plan_requests ?? []).filter((request: any) => request.status === 'accepted').length;
           return { ...plan, matchReasons: reasons, joined_count: joinedCount };
@@ -260,18 +328,14 @@ export default function CreatePlanScreen() {
       Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorArea'));
       return;
     }
-
-    setCreating(true);
-    const parsedDate = parsePlanDate(day, month, year);
-    if (!parsedDate) {
-      setCreating(false);
-      Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorInvalidDate'));
+    if (!selectedDateIso) {
+      Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorDate'));
       return;
     }
 
-    const [d, m, y] = date.split('/');
+    setCreating(true);
     const timeStr = timeSlot || '09:00';
-    const scheduledAt = new Date(`${y}-${m}-${d}T${timeStr}:00`);
+    const scheduledAt = new Date(`${selectedDateIso}T${timeStr}:00`);
 
     const { error } = await supabase.from('plans').insert({
       host_id: user?.id,
@@ -299,8 +363,7 @@ export default function CreatePlanScreen() {
   const openCreateModal = () => {
     const newErrors: { category?: string; date?: string } = {};
     if (!category) newErrors.category = t('createPlan.errorCategory');
-    if (!date) newErrors.date = t('createPlan.errorDate');
-    else if (!parsePlanDate(day, month, year)) newErrors.date = t('createPlan.errorInvalidDate');
+    if (!selectedDateIso) newErrors.date = t('createPlan.errorDate');
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -310,9 +373,15 @@ export default function CreatePlanScreen() {
     setShowCreateModal(true);
   };
 
+  const handleSelectCalendarDate = (iso: string) => {
+    setSelectedDateIso(iso);
+    setErrors((prev) => ({ ...prev, date: undefined }));
+    setShowCalendarModal(false);
+  };
+
   const formatTime = (iso: string) => {
     const d = new Date(iso);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} â€” ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} - ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
   };
 
   return (
@@ -324,7 +393,7 @@ export default function CreatePlanScreen() {
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backText}>â†</Text>
+            <Entypo name="chevron-thin-left" size={18} color={PRIMARY_BLUE} />
           </TouchableOpacity>
           <Text style={styles.title}>{t('createPlan.title')}</Text>
         </View>
@@ -333,17 +402,18 @@ export default function CreatePlanScreen() {
           <View style={styles.compactRow}>
             <View style={styles.compactLeft}>
               <View style={styles.compactBadge}>
-                <Text style={styles.compactEmoji}>{categoryEmoji}</Text>
+                <Entypo name={categoryIcon as any} size={20} color={PRIMARY_BLUE} />
               </View>
               <View style={styles.compactTextCol}>
                 <Text style={styles.compactLine} numberOfLines={1}>
-                  {date} | {summaryTime}
+                  {selectedDate?.shortLabel} | {summaryTime}
                 </Text>
                 <Text style={styles.compactSubLine}>{t(`categories.${category}`)}</Text>
               </View>
             </View>
             <TouchableOpacity style={styles.editButton} onPress={() => setCollapsed(false)}>
-              <Text style={styles.editButtonText}>âœï¸ Edit</Text>
+              <Entypo name="edit" size={14} color={PRIMARY_BLUE} />
+              <Text style={styles.editButtonText}>{editLabel}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -359,66 +429,54 @@ export default function CreatePlanScreen() {
                     setErrors((prev) => ({ ...prev, category: undefined }));
                   }}
                 >
-                  <Text style={styles.categoryEmoji}>{item.emoji}</Text>
+                  <Entypo name={item.icon as any} size={22} color={category === item.key ? PRIMARY_BLUE : '#6B7280'} />
                   <Text style={[styles.categoryLabel, category === item.key && styles.categoryLabelActive]}>
                     {t(`categories.${item.key}`)}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
-            {!!errors.category && <Text style={styles.errorText}>Warning: {errors.category}</Text>}
+            {!!errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
 
             <Text style={styles.sectionTitle}>{t('createPlan.when')}</Text>
             <Text style={styles.label}>{t('createPlan.date')}</Text>
-            <View style={styles.dateRow}>
-              <TextInput
-                ref={dayRef}
-                style={[styles.input, styles.dateInput, !!errors.date && styles.inputError]}
-                placeholder="DD"
-                value={day}
-                onChangeText={(text) => {
-                  const next = text.replace(/\D/g, '').slice(0, 2);
-                  setDay(next);
-                  if (next.length === 2) monthRef.current?.focus();
-                  setErrors((prev) => ({ ...prev, date: undefined }));
-                }}
-                keyboardType="numeric"
-                maxLength={2}
-                placeholderTextColor="#9CA3AF"
-              />
-              <Text style={styles.dateSep}>/</Text>
-              <TextInput
-                ref={monthRef}
-                style={[styles.input, styles.dateInput, !!errors.date && styles.inputError]}
-                placeholder="MM"
-                value={month}
-                onChangeText={(text) => {
-                  const next = text.replace(/\D/g, '').slice(0, 2);
-                  setMonth(next);
-                  if (next.length === 2) yearRef.current?.focus();
-                  setErrors((prev) => ({ ...prev, date: undefined }));
-                }}
-                keyboardType="numeric"
-                maxLength={2}
-                placeholderTextColor="#9CA3AF"
-              />
-              <Text style={styles.dateSep}>/</Text>
-              <TextInput
-                ref={yearRef}
-                style={[styles.input, styles.dateInputYear, !!errors.date && styles.inputError]}
-                placeholder="YYYY"
-                value={year}
-                onChangeText={(text) => {
-                  setYear(text.replace(/\D/g, '').slice(0, 4));
-                  setErrors((prev) => ({ ...prev, date: undefined }));
-                }}
-                keyboardType="numeric"
-                maxLength={4}
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
-            {!!date && <Text style={styles.dateFormatHint}>Date: {date}</Text>}
-            {!!errors.date && <Text style={styles.errorText}>Warning: {errors.date}</Text>}
+            <Text style={styles.dateHelper}>{t('createPlan.selectDate')}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateList}>
+              {dateOptions.map((option) => {
+                const active = selectedDateIso === option.iso;
+                return (
+                  <TouchableOpacity
+                    key={option.iso}
+                    style={[styles.dateChip, active && styles.dateChipActive, !!errors.date && styles.dateChipError]}
+                    onPress={() => {
+                      setSelectedDateIso(option.iso);
+                      setErrors((prev) => ({ ...prev, date: undefined }));
+                    }}
+                  >
+                    <Text style={[styles.dateChipWeekday, active && styles.dateChipWeekdayActive]}>
+                      {option.weekdayLabel}
+                    </Text>
+                    <Text style={[styles.dateChipDay, active && styles.dateChipDayActive]}>
+                      {option.dayNumber}
+                    </Text>
+                    <Text style={[styles.dateChipMonth, active && styles.dateChipMonthActive]}>
+                      {option.monthLabel}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.calendarButton}
+              onPress={() => setShowCalendarModal(true)}
+            >
+              <Entypo name="calendar" size={16} color={PRIMARY_BLUE} />
+              <Text style={styles.calendarButtonText}>
+                {selectedDate ? chooseAnotherDateLabel : openCalendarLabel}
+              </Text>
+            </TouchableOpacity>
+            {!!selectedDate && <Text style={styles.dateFormatHint}>{selectedDate.shortLabel}</Text>}
+            {!!errors.date && <Text style={styles.errorText}>{errors.date}</Text>}
 
             <Text style={styles.label}>
               {t('createPlan.time')} <Text style={styles.optional}>{t('createPlan.timeOptional')}</Text>
@@ -448,6 +506,7 @@ export default function CreatePlanScreen() {
         )}
 
         <TouchableOpacity style={styles.findButton} onPress={handleFindSuggestions}>
+          <Entypo name="magnifying-glass" size={18} color="#FFFFFF" />
           <Text style={styles.findButtonText}>{t('createPlan.findButton')}</Text>
         </TouchableOpacity>
 
@@ -469,10 +528,10 @@ export default function CreatePlanScreen() {
                 return (
                   <View key={item.id} style={styles.planCard}>
                     <View style={styles.planHeader}>
-                      <Text style={styles.planEmoji}>{CATEGORY_EMOJI[item.category] ?? '\u{1F4CD}'}</Text>
+                      <Entypo name={(CATEGORY_ICON[item.category] ?? 'location-pin') as any} size={22} color={PRIMARY_BLUE} style={styles.planIcon} />
                       <View style={styles.planHeaderText}>
                         <Text style={styles.planTitle} numberOfLines={1}>{item.title}</Text>
-                        <Text style={styles.planLocation}>Location: {item.location_text}</Text>
+                        <Text style={styles.planLocation}>{item.location_text}</Text>
                       </View>
                       <View style={[styles.slotBadge, isFull && styles.slotBadgeFull]}>
                         <Text style={[styles.slotText, isFull && styles.slotTextFull]}>
@@ -480,7 +539,7 @@ export default function CreatePlanScreen() {
                         </Text>
                       </View>
                     </View>
-                    <Text style={styles.planTime}>Time: {formatTime(item.scheduled_at)}</Text>
+                    <Text style={styles.planTime}>{formatTime(item.scheduled_at)}</Text>
                     <View style={styles.reasonsRow}>
                       {item.matchReasons.map((reason, index) => (
                         <View key={`${item.id}-${reason}-${index}`} style={styles.reasonChip}>
@@ -528,16 +587,16 @@ export default function CreatePlanScreen() {
             <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
               <View style={styles.modalHeader}>
                 <TouchableOpacity onPress={() => setShowCreateModal(false)} style={styles.backButton}>
-                  <Text style={styles.backText}>âœ•</Text>
+                  <Entypo name="cross" size={18} color={PRIMARY_BLUE} />
                 </TouchableOpacity>
                 <Text style={styles.title}>{t('createPlan.modalTitle')}</Text>
               </View>
 
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryText}>
-                  {CATEGORY_EMOJI[category]} {t(`categories.${category}`)}
+                  {category ? `${t(`categories.${category}`)}` : ''}
                   {timeSlot ? ` | ${timeSlot}` : ` | ${t('createPlan.anyTime')}`}
-                  {date ? ` | ${date}` : ''}
+                  {selectedDate ? ` | ${selectedDate.shortLabel}` : ''}
                 </Text>
               </View>
 
@@ -568,7 +627,7 @@ export default function CreatePlanScreen() {
                       onPress={() => handleSelectPlace(place)}
                     >
                       <Text style={styles.placeSuggestName} numberOfLines={1}>
-                        {CATEGORY_EMOJI[place.category] ?? '\u{1F4CD}'} {place.name}
+                        {place.name}
                       </Text>
                       <Text style={styles.placeSuggestAddr} numberOfLines={1}>
                         {place.address}
@@ -625,6 +684,69 @@ export default function CreatePlanScreen() {
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
+
+      <Modal visible={showCalendarModal} transparent animationType="fade">
+        <View style={styles.calendarOverlay}>
+          <View style={styles.calendarModal}>
+            <View style={styles.calendarHeader}>
+              <Text style={styles.calendarTitle}>{calendarMonthLabel}</Text>
+              <TouchableOpacity onPress={() => setShowCalendarModal(false)} style={styles.calendarClose}>
+                <Entypo name="cross" size={18} color={PRIMARY_BLUE} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.calendarNavRow}>
+              <TouchableOpacity
+                style={styles.calendarNavButton}
+                onPress={() => setCalendarMonth((prev) => addMonths(prev, -1))}
+              >
+                <Entypo name="chevron-left" size={18} color={PRIMARY_BLUE} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.calendarNavButton}
+                onPress={() => setCalendarMonth((prev) => addMonths(prev, 1))}
+              >
+                <Entypo name="chevron-right" size={18} color={PRIMARY_BLUE} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.calendarWeekdays}>
+              {weekdayHeaders.map((label, index) => (
+                <Text key={`${label}-${index}`} style={styles.calendarWeekdayText}>{label}</Text>
+              ))}
+            </View>
+
+            <View style={styles.calendarGrid}>
+              {calendarDays.map((day) => {
+                const selected = day.iso === selectedDateIso;
+                return (
+                  <TouchableOpacity
+                    key={day.iso}
+                    style={[
+                      styles.calendarDay,
+                      selected && styles.calendarDaySelected,
+                      !day.inMonth && styles.calendarDayOutsideMonth,
+                    ]}
+                    disabled={day.disabled}
+                    onPress={() => handleSelectCalendarDate(day.iso)}
+                  >
+                    <Text
+                      style={[
+                        styles.calendarDayText,
+                        selected && styles.calendarDayTextSelected,
+                        !day.inMonth && styles.calendarDayTextOutsideMonth,
+                        day.disabled && styles.calendarDayTextDisabled,
+                      ]}
+                    >
+                      {day.dayNumber}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -638,49 +760,149 @@ const styles = StyleSheet.create({
   modalContent: { padding: 20, paddingBottom: 40 },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  backButton: { width: 36, height: 36, backgroundColor: '#F5F7FB', borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  backText: { fontSize: 18, color: PRIMARY_BLUE, fontWeight: '700' },
+  backButton: {
+    width: 36,
+    height: 36,
+    backgroundColor: '#F5F7FB',
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
   title: { fontSize: 20, fontWeight: '700', color: '#1A1A1A' },
   sectionTitle: { fontSize: 17, fontWeight: '700', color: '#1A1A1A', marginBottom: 14 },
   categoriesGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10, marginBottom: 24 },
-  categoryCard: { width: '48%', backgroundColor: '#F5F7FB', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 2, borderColor: 'transparent' },
+  categoryCard: {
+    width: '48%',
+    backgroundColor: '#F5F7FB',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+    gap: 6,
+  },
   categoryCardActive: { borderColor: PRIMARY_BLUE, backgroundColor: LIGHT_BLUE },
-  categoryEmoji: { fontSize: 26, marginBottom: 4 },
   categoryLabel: { fontSize: 13, fontWeight: '600', color: '#374151' },
   categoryLabelActive: { color: PRIMARY_BLUE },
   label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8, marginTop: 14 },
+  dateHelper: { fontSize: 12, color: '#6B7280', marginBottom: 10 },
   optional: { fontSize: 12, color: '#9CA3AF', fontWeight: '400' },
-  input: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 14, fontSize: 15, color: '#1A1A1A', backgroundColor: '#F9FAFB' },
-  inputError: { borderColor: '#DC2626', backgroundColor: '#FEF2F2' },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    color: '#1A1A1A',
+    backgroundColor: '#F9FAFB',
+  },
   fieldError: { borderRadius: 14, borderWidth: 1.5, borderColor: '#DC2626' },
   errorText: { color: '#DC2626', fontSize: 12, fontWeight: '500', marginTop: 6 },
-  dateRow: { flexDirection: 'row', alignItems: 'center' },
-  dateSep: { marginHorizontal: 8, color: '#9CA3AF', fontWeight: '700', fontSize: 16 },
-  dateInput: { width: 72, textAlign: 'center' },
-  dateInputYear: { width: 110, textAlign: 'center' },
-  dateFormatHint: { fontSize: 13, color: '#1E88E5', fontWeight: '600', marginTop: 6 },
+  dateList: { marginBottom: 4 },
+  dateChip: {
+    width: 78,
+    backgroundColor: '#F5F7FB',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginRight: 10,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  dateChipActive: { backgroundColor: LIGHT_BLUE, borderColor: PRIMARY_BLUE },
+  dateChipError: { borderColor: '#FCA5A5' },
+  dateChipWeekday: { fontSize: 11, fontWeight: '600', color: '#6B7280', textTransform: 'uppercase' },
+  dateChipWeekdayActive: { color: PRIMARY_BLUE },
+  dateChipDay: { fontSize: 22, fontWeight: '700', color: '#111827', marginVertical: 2 },
+  dateChipDayActive: { color: PRIMARY_BLUE },
+  dateChipMonth: { fontSize: 12, color: '#6B7280', fontWeight: '600' },
+  dateChipMonthActive: { color: PRIMARY_BLUE },
+  calendarButton: {
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  calendarButtonText: { color: PRIMARY_BLUE, fontSize: 13, fontWeight: '700' },
+  dateFormatHint: { fontSize: 13, color: '#1E88E5', fontWeight: '600', marginTop: 8 },
   inputMultiline: { minHeight: 80 },
   timeSlotList: { marginBottom: 4 },
-  timeSlot: { backgroundColor: '#F5F7FB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, marginRight: 8, borderWidth: 1.5, borderColor: 'transparent' },
+  timeSlot: {
+    backgroundColor: '#F5F7FB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
   timeSlotActive: { backgroundColor: LIGHT_BLUE, borderColor: PRIMARY_BLUE },
   timeSlotText: { fontSize: 14, fontWeight: '600', color: '#374151' },
   timeSlotTextActive: { color: PRIMARY_BLUE },
-  findButton: { backgroundColor: PRIMARY_BLUE, borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 20 },
+  findButton: {
+    backgroundColor: PRIMARY_BLUE,
+    borderRadius: 14,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
   findButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  compactRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: LIGHT_BLUE, borderRadius: 14, padding: 12, marginBottom: 18 },
+  compactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: LIGHT_BLUE,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 18,
+  },
   compactLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 },
-  compactBadge: { width: 42, height: 42, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  compactEmoji: { fontSize: 22 },
+  compactBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
   compactTextCol: { flex: 1 },
   compactLine: { fontSize: 14, fontWeight: '700', color: PRIMARY_BLUE },
   compactSubLine: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  editButton: { backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  editButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   editButtonText: { fontSize: 13, fontWeight: '700', color: PRIMARY_BLUE },
   suggestSection: { marginTop: 28 },
   suggestTitle: { fontSize: 17, fontWeight: '700', color: '#1A1A1A', marginBottom: 14 },
-  planCard: { backgroundColor: '#F9FAFB', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E5E7EB' },
+  planCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
   planHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  planEmoji: { fontSize: 26, marginRight: 10 },
+  planIcon: { marginRight: 10 },
   planHeaderText: { flex: 1 },
   planTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
   planLocation: { fontSize: 12, color: '#6B7280', marginTop: 2 },
@@ -696,17 +918,124 @@ const styles = StyleSheet.create({
   joinButton: { backgroundColor: PRIMARY_BLUE, borderRadius: 12, padding: 12, alignItems: 'center' },
   joinButtonDisabled: { backgroundColor: '#E5E7EB' },
   joinButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  stickyBottom: { paddingHorizontal: 20, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
+  stickyBottom: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
   createOwnButton: { borderWidth: 1.5, borderColor: PRIMARY_BLUE, borderRadius: 14, padding: 14, alignItems: 'center' },
   createOwnText: { color: PRIMARY_BLUE, fontSize: 15, fontWeight: '700' },
+  calendarOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  calendarModal: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  calendarTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  calendarClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5F7FB',
+  },
+  calendarNavRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  calendarNavButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F5F7FB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarWeekdays: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  calendarWeekdayText: {
+    width: '14.28%',
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarDay: {
+    width: '14.28%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+    borderRadius: 14,
+  },
+  calendarDaySelected: {
+    backgroundColor: LIGHT_BLUE,
+  },
+  calendarDayOutsideMonth: {
+    opacity: 0.45,
+  },
+  calendarDayText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  calendarDayTextSelected: {
+    color: PRIMARY_BLUE,
+    fontWeight: '700',
+  },
+  calendarDayTextOutsideMonth: {
+    color: '#94A3B8',
+  },
+  calendarDayTextDisabled: {
+    color: '#CBD5E1',
+  },
   summaryCard: { backgroundColor: LIGHT_BLUE, borderRadius: 12, padding: 14, marginBottom: 8 },
   summaryText: { fontSize: 15, fontWeight: '600', color: PRIMARY_BLUE },
-  placeSuggestBox: { backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', marginTop: 4, marginBottom: 8, overflow: 'hidden' },
+  placeSuggestBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginTop: 4,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
   placeSuggestItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   placeSuggestName: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
   placeSuggestAddr: { fontSize: 12, color: '#6B7280', marginTop: 2 },
   buddyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  buddyButton: { width: 40, height: 40, backgroundColor: '#F5F7FB', borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
+  buddyButton: {
+    width: 40,
+    height: 40,
+    backgroundColor: '#F5F7FB',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
   buddyButtonText: { fontSize: 20, color: PRIMARY_BLUE, fontWeight: '700' },
   buddyCount: { fontSize: 20, fontWeight: '700', color: '#1A1A1A', marginHorizontal: 20 },
   submitButton: { backgroundColor: PRIMARY_BLUE, borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 24 },
