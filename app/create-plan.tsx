@@ -122,6 +122,7 @@ export default function CreatePlanScreen() {
   const [placeSuggestions, setPlaceSuggestions] = useState<any[]>([]);
   const [searchingPlace, setSearchingPlace] = useState(false);
   const placeSearchTimer = useRef<any>(null);
+  const webDateInputRef = useRef<any>(null);
 
   const minDateIso = useMemo(() => toIsoDate(new Date()), []);
   const selectedDateLabel = useMemo(
@@ -171,7 +172,16 @@ export default function CreatePlanScreen() {
   }, []);
 
   const handleOpenDatePicker = () => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web') {
+      if (typeof webDateInputRef.current?.showPicker === 'function') {
+        webDateInputRef.current.showPicker();
+        return;
+      }
+      if (typeof webDateInputRef.current?.click === 'function') {
+        webDateInputRef.current.click();
+      }
+      return;
+    }
     if (!NativeDateTimePicker) {
       Alert.alert(
         'Date picker missing',
@@ -393,7 +403,11 @@ export default function CreatePlanScreen() {
 
             <Text style={styles.sectionTitle}>{t('createPlan.when')}</Text>
             <Text style={styles.label}>{t('createPlan.date')}</Text>
-            <View style={[styles.datePickerField, !!errors.date && styles.inputError]}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[styles.datePickerField, !!errors.date && styles.inputError]}
+              onPress={handleOpenDatePicker}
+            >
               <View style={styles.datePickerLeft}>
                 <Entypo name="calendar" size={18} color={PRIMARY_BLUE} />
                 <Text style={[styles.datePickerText, !selectedDateIso && styles.datePickerPlaceholder]}>
@@ -404,20 +418,22 @@ export default function CreatePlanScreen() {
               {Platform.OS === 'web' ? (
                 <View style={styles.webDateInputWrap}>
                   {React.createElement('input', {
+                    ref: webDateInputRef,
                     type: 'date',
                     value: selectedDateIso,
                     min: minDateIso,
                     onChange: (event: any) => setPickedDate(event.target.value),
                     style: styles.webDateNativeInput,
                     'aria-label': t('createPlan.date'),
+                    tabIndex: -1,
                   })}
                 </View>
               ) : (
-                <TouchableOpacity style={styles.datePickerTap} onPress={handleOpenDatePicker}>
+                <View style={styles.datePickerTap}>
                   <Text style={styles.datePickerAction}>{t('common.ok') === 'OK' ? 'Pick' : 'Chon'}</Text>
-                </TouchableOpacity>
+                </View>
               )}
-            </View>
+            </TouchableOpacity>
             {!!errors.date && <Text style={styles.errorText}>{errors.date}</Text>}
 
             <Text style={styles.label}>
