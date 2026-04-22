@@ -1,19 +1,18 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
 
 type Message = {
@@ -27,7 +26,6 @@ type Message = {
 export default function ChatScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { t } = useLanguage();
   const { matchUserId, planTitle } = useLocalSearchParams<{
     matchUserId: string;
     planTitle: string;
@@ -40,98 +38,112 @@ export default function ChatScreen() {
   const [sending, setSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
-  // Tìm match record giữa 2 user
+  const fetchMessages = async (currentMatchId: string) => {
+    const { data } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('match_id', currentMatchId)
+      .order('created_at', { ascending: true });
+
+    if (data) setMessages(data);
+  };
+
   useEffect(() => {
+    let active = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
     const findMatch = async () => {
-        const { data } = await supabase
+      const { data } = await supabase
         .from('matches')
         .select('id')
         .or(
-            `and(user1_id.eq.${user?.id},user2_id.eq.${matchUserId}),and(user1_id.eq.${matchUserId},user2_id.eq.${user?.id})`
+          `and(user1_id.eq.${user?.id},user2_id.eq.${matchUserId}),and(user1_id.eq.${matchUserId},user2_id.eq.${user?.id})`
         )
         .limit(1)
         .single();
 
-        if (data) {
-        setMatchId(data.id);
-        await fetchMessages(data.id);
+      if (!active) return;
 
-        const channel = supabase
-            .channel(`chat-${data.id}`)
-            .on(
-            'postgres_changes',
-            {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'messages',
-                filter: `match_id=eq.${data.id}`,
-            },
-            payload => {
-                setMessages(prev => {
-                if (prev.find(m => m.id === payload.new.id)) return prev;
-                return [...prev, payload.new as Message];
-                });
-                setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-            }
-            )
-            .subscribe();
+      if (!data) {
+        setLoading(false);
+        return;
+      }
 
-        setLoading(false);
-        return () => { supabase.removeChannel(channel); };
-        }
-        setLoading(false);
+      setMatchId(data.id);
+      await fetchMessages(data.id);
+      if (!active) return;
+
+      channel = supabase
+        .channel(`chat-${data.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `match_id=eq.${data.id}`,
+          },
+          (payload) => {
+            setMessages((prev) => {
+              if (prev.find((message) => message.id === payload.new.id)) return prev;
+              return [...prev, payload.new as Message];
+            });
+            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+          }
+        )
+        .subscribe();
+
+      setLoading(false);
     };
 
     findMatch();
-    }, []);
 
-  const fetchMessages = async (mid: string) => {
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('match_id', mid)
-      .order('created_at', { ascending: true });
-    if (data) setMessages(data);
-  };
-
-  // Realtime subscription
-  
+    return () => {
+      active = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [matchUserId, user?.id]);
 
   const handleSend = async () => {
     if (!text.trim() || !matchId) return;
+
     setSending(true);
     const content = text.trim();
     setText('');
 
-    // Tạo optimistic message hiện ngay
-    const optimisticMsg: Message = {
-        id: `temp-${Date.now()}`,
-        match_id: matchId,
-        sender_id: user?.id ?? '',
-        content,
-        created_at: new Date().toISOString(),
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`,
+      match_id: matchId,
+      sender_id: user?.id ?? '',
+      content,
+      created_at: new Date().toISOString(),
     };
-    setMessages(prev => [...prev, optimisticMsg]);
+
+    setMessages((prev) => [...prev, optimisticMessage]);
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
 
-    // Insert vào DB
-    const { data, error } = await supabase.from('messages').insert({
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
         match_id: matchId,
         sender_id: user?.id,
         content,
-    }).select().single();
+      })
+      .select()
+      .single();
 
     if (!error && data) {
-        // Replace optimistic message bằng message thật từ DB
-        setMessages(prev => prev.map(m => m.id === optimisticMsg.id ? data : m));
+      setMessages((prev) => prev.map((message) => message.id === optimisticMessage.id ? data : message));
+    } else {
+      setMessages((prev) => prev.filter((message) => message.id !== optimisticMessage.id));
     }
 
     setSending(false);
-    };
+  };
 
   const formatTime = (iso: string) => {
-    const d = new Date(iso);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    const date = new Date(iso);
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   };
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
@@ -142,9 +154,7 @@ export default function ChatScreen() {
 
     return (
       <View>
-        {showTime && (
-          <Text style={styles.timeLabel}>{formatTime(item.created_at)}</Text>
-        )}
+        {showTime && <Text style={styles.timeLabel}>{formatTime(item.created_at)}</Text>}
         <View style={[styles.messageRow, isMe && styles.messageRowMe]}>
           <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
             <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>
@@ -158,14 +168,13 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>←</Text>
+          <Text style={styles.backText}>{'<'}</Text>
         </TouchableOpacity>
         <View style={styles.headerInfo}>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            💬 {planTitle ? decodeURIComponent(planTitle) : 'Chat'}
+            {planTitle ? decodeURIComponent(planTitle) : 'Chat'}
           </Text>
           <Text style={styles.headerSubtitle}>
             Buddy #{matchUserId?.slice(0, 8)}
@@ -178,43 +187,39 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        {/* Messages */}
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color="#1E88E5" />
           </View>
         ) : matchId === null ? (
           <View style={styles.center}>
-            <Text style={styles.emptyEmoji}>🔍</Text>
-            <Text style={styles.emptyText}>Không tìm thấy cuộc trò chuyện</Text>
+            <Text style={styles.emptyEmoji}>?</Text>
+            <Text style={styles.emptyText}>KhÃ´ng tÃ¬m tháº¥y cuá»™c trÃ² chuyá»‡n</Text>
           </View>
         ) : (
           <FlatList
             ref={flatListRef}
             data={messages}
-            keyExtractor={item => item.id}
+            keyExtractor={(item) => item.id}
             renderItem={renderMessage}
             contentContainerStyle={styles.messagesList}
             showsVerticalScrollIndicator={false}
-            onContentSizeChange={() =>
-              flatListRef.current?.scrollToEnd({ animated: false })
-            }
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
             ListEmptyComponent={
               <View style={styles.emptyChat}>
-                <Text style={styles.emptyChatEmoji}>👋</Text>
+                <Text style={styles.emptyChatEmoji}>...</Text>
                 <Text style={styles.emptyChatText}>
-                  Bắt đầu cuộc trò chuyện với buddy!
+                  Báº¯t Ä‘áº§u cuá»™c trÃ² chuyá»‡n vá»›i buddy!
                 </Text>
               </View>
             }
           />
         )}
 
-        {/* Input */}
         <View style={styles.inputBar}>
           <TextInput
             style={styles.input}
-            placeholder="Nhắn tin..."
+            placeholder="Nháº¯n tin..."
             value={text}
             onChangeText={setText}
             multiline
@@ -227,7 +232,7 @@ export default function ChatScreen() {
             onPress={handleSend}
             disabled={!text.trim() || sending}
           >
-            <Text style={styles.sendButtonText}>➤</Text>
+            <Text style={styles.sendButtonText}>{'>'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -236,7 +241,6 @@ export default function ChatScreen() {
 }
 
 const PRIMARY_BLUE = '#1E88E5';
-const LIGHT_BLUE = '#E3F2FD';
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFFFFF' },

@@ -5,7 +5,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -18,18 +17,13 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
 
-let DateTimePicker: any = null;
-if (Platform.OS !== 'web') {
-  DateTimePicker = require('@react-native-community/datetimepicker').default;
-}
-
 const CATEGORIES = [
-  { key: 'cafe', emoji: '☕' },
-  { key: 'gym', emoji: '🏋️' },
-  { key: 'movies', emoji: '🎬' },
-  { key: 'park', emoji: '🌳' },
-  { key: 'food', emoji: '🍽️' },
-  { key: 'study', emoji: '📚' },
+  { key: 'cafe', emoji: '\u2615' },
+  { key: 'gym', emoji: '\u{1F3CB}\uFE0F' },
+  { key: 'movies', emoji: '\u{1F3AC}' },
+  { key: 'park', emoji: '\u{1F333}' },
+  { key: 'food', emoji: '\u{1F37D}\uFE0F' },
+  { key: 'study', emoji: '\u{1F4DA}' },
 ];
 
 const TIME_SLOTS = [
@@ -39,8 +33,8 @@ const TIME_SLOTS = [
 ];
 
 const CATEGORY_EMOJI: Record<string, string> = {
-  cafe: '☕', gym: '🏋️', movies: '🎬',
-  park: '🌳', food: '🍽️', study: '📚',
+  cafe: '\u2615', gym: '\u{1F3CB}\uFE0F', movies: '\u{1F3AC}',
+  park: '\u{1F333}', food: '\u{1F37D}\uFE0F', study: '\u{1F4DA}',
 };
 
 type Plan = {
@@ -61,6 +55,7 @@ function calcMatch(plan: any, category: string, timeSlot: string, date: string):
   const reasons: string[] = [];
   if (plan.category !== category) return { match: false, reasons: [] };
   reasons.push('activity');
+
   if (date) {
     const [day, month, year] = date.split('/');
     const myDate = `${year}-${month}-${day}`;
@@ -68,13 +63,36 @@ function calcMatch(plan: any, category: string, timeSlot: string, date: string):
     if (planDate !== myDate) return { match: false, reasons: [] };
     reasons.push('date');
   }
+
   if (timeSlot) {
     const planHour = new Date(plan.scheduled_at).getHours();
-    const myHour = parseInt(timeSlot.split(':')[0]);
+    const myHour = parseInt(timeSlot.split(':')[0], 10);
     if (Math.abs(planHour - myHour) === 0) reasons.push('timeExact');
     else if (Math.abs(planHour - myHour) <= 1) reasons.push('timeNear');
   }
+
   return { match: true, reasons };
+}
+
+function parsePlanDate(day: string, month: string, year: string) {
+  if (!day || !month || !year) return null;
+  if (!/^\d{2}$/.test(day) || !/^\d{2}$/.test(month) || !/^\d{4}$/.test(year)) return null;
+
+  const parsed = new Date(`${year}-${month}-${day}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (
+    parsed.getDate() !== Number(day) ||
+    parsed.getMonth() + 1 !== Number(month) ||
+    parsed.getFullYear() !== Number(year)
+  ) {
+    return null;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (parsed < today) return null;
+
+  return parsed;
 }
 
 export default function CreatePlanScreen() {
@@ -82,28 +100,19 @@ export default function CreatePlanScreen() {
   const { user } = useAuth();
   const { t } = useLanguage();
 
-  // Step 1 & 2 state
   const [category, setCategory] = useState('');
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [errors, setErrors] = useState<{ category?: string; date?: string }>({});
-  const date = useMemo(() => {
-    if (!selectedDate) return '';
-    const d = selectedDate.getDate().toString().padStart(2, '0');
-    const m = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
-    const y = selectedDate.getFullYear().toString();
-    return `${d}/${m}/${y}`;
-  }, [selectedDate]);
+  const [day, setDay] = useState('');
+  const [month, setMonth] = useState('');
+  const [year, setYear] = useState('');
   const [timeSlot, setTimeSlot] = useState('');
   const [collapsed, setCollapsed] = useState(false);
 
-  // Suggestions state
   const [suggestions, setSuggestions] = useState<Plan[]>([]);
   const [loadingSuggest, setLoadingSuggest] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [requesting, setRequesting] = useState<string | null>(null);
 
-  // Create plan modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [title, setTitle] = useState('');
   const [locationText, setLocationText] = useState('');
@@ -111,14 +120,21 @@ export default function CreatePlanScreen() {
   const [maxBuddies, setMaxBuddies] = useState(1);
   const [creating, setCreating] = useState(false);
 
-  // Place search state
   const [placeSearch, setPlaceSearch] = useState('');
   const [placeSuggestions, setPlaceSuggestions] = useState<any[]>([]);
   const [searchingPlace, setSearchingPlace] = useState(false);
   const placeSearchTimer = useRef<any>(null);
+  const dayRef = useRef<TextInput>(null);
+  const monthRef = useRef<TextInput>(null);
+  const yearRef = useRef<TextInput>(null);
 
-  const categoryEmoji = CATEGORY_EMOJI[category] ?? '📍';
-  const summaryTime = timeSlot ? timeSlot : t('createPlan.anyTime');
+  const date = useMemo(() => {
+    if (!day || !month || !year) return '';
+    return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+  }, [day, month, year]);
+
+  const categoryEmoji = CATEGORY_EMOJI[category] ?? '\u{1F4CD}';
+  const summaryTime = timeSlot || t('createPlan.anyTime');
 
   const reasonLabel = (key: string) => {
     if (key === 'activity') return t('createPlan.reasonActivity');
@@ -132,43 +148,62 @@ export default function CreatePlanScreen() {
     if (showSuggestions) setCollapsed(true);
   }, [showSuggestions]);
 
+  useEffect(() => {
+    return () => {
+      if (placeSearchTimer.current) clearTimeout(placeSearchTimer.current);
+    };
+  }, []);
+
   const handleFindSuggestions = async () => {
     const newErrors: { category?: string; date?: string } = {};
     if (!category) newErrors.category = t('createPlan.errorCategory');
     if (!date) newErrors.date = t('createPlan.errorDate');
-    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+    else if (!parsePlanDate(day, month, year)) newErrors.date = t('createPlan.errorInvalidDate');
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
     setErrors({});
     setLoadingSuggest(true);
     setShowSuggestions(true);
+
     const { data, error } = await supabase
       .from('plans')
       .select('*, plan_requests(id, status)')
       .eq('status', 'open')
       .neq('host_id', user?.id)
       .order('created_at', { ascending: false });
+
     if (!error && data) {
       const matched = data
-        .map(p => {
-          const { match, reasons } = calcMatch(p, category, timeSlot, date);
+        .map((plan) => {
+          const { match, reasons } = calcMatch(plan, category, timeSlot, date);
           if (!match) return null;
-          const joinedCount = (p.plan_requests ?? []).filter((r: any) => r.status === 'accepted').length;
-          return { ...p, matchReasons: reasons, joined_count: joinedCount };
+          const joinedCount = (plan.plan_requests ?? []).filter((request: any) => request.status === 'accepted').length;
+          return { ...plan, matchReasons: reasons, joined_count: joinedCount };
         })
         .filter(Boolean) as Plan[];
       setSuggestions(matched);
     }
+
     setLoadingSuggest(false);
   };
 
   const handleRequestJoin = async (plan: Plan) => {
     const remaining = plan.max_buddies - (plan.joined_count ?? 0);
-    if (remaining <= 0) { Alert.alert(t('createPlan.full'), t('createPlan.fullAlert')); return; }
+    if (remaining <= 0) {
+      Alert.alert(t('createPlan.full'), t('createPlan.fullAlert'));
+      return;
+    }
+
     setRequesting(plan.id);
     const { error } = await supabase.from('plan_requests').insert({
       plan_id: plan.id,
       requester_id: user?.id,
-      message: `👋 ${t('createPlan.join')}`,
+      message: `[join] ${t('createPlan.join')}`,
     });
+
     if (error) {
       Alert.alert(
         error.code === '23505' ? t('createPlan.requestSent') : t('writeReview.errorTitle'),
@@ -176,18 +211,23 @@ export default function CreatePlanScreen() {
       );
     } else {
       Alert.alert(t('createPlan.requestSent'), t('createPlan.waitForHost'), [
-        { text: t('common.ok'), onPress: () => router.replace('/(tabs)/' as any) }
+        { text: t('common.ok'), onPress: () => router.replace('/(tabs)/' as any) },
       ]);
     }
+
     setRequesting(null);
   };
 
-  // Place search handler
   const handlePlaceSearch = useCallback(async (text: string) => {
     setPlaceSearch(text);
     setTitle(text);
+
     if (placeSearchTimer.current) clearTimeout(placeSearchTimer.current);
-    if (text.length < 2) { setPlaceSuggestions([]); return; }
+    if (text.length < 2) {
+      setPlaceSuggestions([]);
+      return;
+    }
+
     placeSearchTimer.current = setTimeout(async () => {
       setSearchingPlace(true);
       const query = supabase
@@ -195,7 +235,9 @@ export default function CreatePlanScreen() {
         .select('id, name, address, category')
         .ilike('name', `%${text}%`)
         .limit(6);
+
       if (category) query.eq('category', category);
+
       const { data } = await query;
       setPlaceSuggestions(data ?? []);
       setSearchingPlace(false);
@@ -210,12 +252,27 @@ export default function CreatePlanScreen() {
   };
 
   const handleCreatePlan = async () => {
-    if (!title.trim()) { Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorTitle')); return; }
-    if (!locationText.trim()) { Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorArea')); return; }
+    if (!title.trim()) {
+      Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorTitle'));
+      return;
+    }
+    if (!locationText.trim()) {
+      Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorArea'));
+      return;
+    }
+
     setCreating(true);
+    const parsedDate = parsePlanDate(day, month, year);
+    if (!parsedDate) {
+      setCreating(false);
+      Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorInvalidDate'));
+      return;
+    }
+
     const [d, m, y] = date.split('/');
     const timeStr = timeSlot || '09:00';
     const scheduledAt = new Date(`${y}-${m}-${d}T${timeStr}:00`);
+
     const { error } = await supabase.from('plans').insert({
       host_id: user?.id,
       category,
@@ -226,13 +283,15 @@ export default function CreatePlanScreen() {
       max_buddies: maxBuddies,
       status: 'open',
     });
+
     if (error) {
       Alert.alert(t('writeReview.errorTitle'), t('createPlan.errorCreate'));
     } else {
       Alert.alert(t('createPlan.planCreated'), t('createPlan.waitForBuddy'), [
-        { text: t('common.ok'), onPress: () => router.replace('/(tabs)/' as any) }
+        { text: t('common.ok'), onPress: () => router.replace('/(tabs)/' as any) },
       ]);
     }
+
     setCreating(false);
     setShowCreateModal(false);
   };
@@ -241,14 +300,19 @@ export default function CreatePlanScreen() {
     const newErrors: { category?: string; date?: string } = {};
     if (!category) newErrors.category = t('createPlan.errorCategory');
     if (!date) newErrors.date = t('createPlan.errorDate');
-    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+    else if (!parsePlanDate(day, month, year)) newErrors.date = t('createPlan.errorInvalidDate');
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
     setErrors({});
     setShowCreateModal(true);
   };
 
   const formatTime = (iso: string) => {
     const d = new Date(iso);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} — ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} â€” ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
   };
 
   return (
@@ -258,15 +322,13 @@ export default function CreatePlanScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backText}>←</Text>
+            <Text style={styles.backText}>â†</Text>
           </TouchableOpacity>
           <Text style={styles.title}>{t('createPlan.title')}</Text>
         </View>
 
-        {/* Collapsed summary or full form */}
         {collapsed ? (
           <View style={styles.compactRow}>
             <View style={styles.compactLeft}>
@@ -275,25 +337,27 @@ export default function CreatePlanScreen() {
               </View>
               <View style={styles.compactTextCol}>
                 <Text style={styles.compactLine} numberOfLines={1}>
-                  {date} • {summaryTime}
+                  {date} | {summaryTime}
                 </Text>
                 <Text style={styles.compactSubLine}>{t(`categories.${category}`)}</Text>
               </View>
             </View>
             <TouchableOpacity style={styles.editButton} onPress={() => setCollapsed(false)}>
-              <Text style={styles.editButtonText}>✏️ Edit</Text>
+              <Text style={styles.editButtonText}>âœï¸ Edit</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
-            {/* Category */}
             <Text style={styles.sectionTitle}>{t('createPlan.whatToDo')}</Text>
             <View style={[styles.categoriesGrid, !!errors.category && styles.fieldError]}>
-              {CATEGORIES.map(item => (
+              {CATEGORIES.map((item) => (
                 <TouchableOpacity
                   key={item.key}
                   style={[styles.categoryCard, category === item.key && styles.categoryCardActive]}
-                  onPress={() => { setCategory(item.key); setErrors(e => ({ ...e, category: undefined })); }}
+                  onPress={() => {
+                    setCategory(item.key);
+                    setErrors((prev) => ({ ...prev, category: undefined }));
+                  }}
                 >
                   <Text style={styles.categoryEmoji}>{item.emoji}</Text>
                   <Text style={[styles.categoryLabel, category === item.key && styles.categoryLabelActive]}>
@@ -302,70 +366,59 @@ export default function CreatePlanScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            {!!errors.category && <Text style={styles.errorText}>⚠️ {errors.category}</Text>}
+            {!!errors.category && <Text style={styles.errorText}>Warning: {errors.category}</Text>}
 
-            {/* Date + Time */}
             <Text style={styles.sectionTitle}>{t('createPlan.when')}</Text>
             <Text style={styles.label}>{t('createPlan.date')}</Text>
-            {Platform.OS === 'web' ? (
-              <View>
-                {/* @ts-ignore */}
-                <input
-                  type="date"
-                  value={selectedDate ? selectedDate.toISOString().split('T')[0] : ''}
-                  min={new Date().toISOString().split('T')[0]}
-                  onChange={(e: any) => {
-                    const val = e.target.value;
-                    if (val) {
-                      setSelectedDate(new Date(val + 'T12:00:00'));
-                      setErrors(prev => ({ ...prev, date: undefined }));
-                    }
-                  }}
-                  style={{
-                    border: errors.date ? '1.5px solid #DC2626' : '1px solid #E5E7EB',
-                    borderRadius: 12,
-                    padding: 14,
-                    fontSize: 15,
-                    color: '#1A1A1A',
-                    backgroundColor: errors.date ? '#FEF2F2' : '#F9FAFB',
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  } as any}
-                />
-                {selectedDate && (
-                  <Text style={styles.dateFormatHint}>📅 {date}</Text>
-                )}
-              </View>
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={[styles.datePickerButton, !!errors.date && styles.datePickerButtonError]}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Text style={[styles.datePickerText, !selectedDate && styles.datePickerPlaceholder]}>
-                    📅 {date || 'dd/mm/yyyy'}
-                  </Text>
-                </TouchableOpacity>
-                {showDatePicker && DateTimePicker && (
-                  <DateTimePicker
-                    value={selectedDate ?? new Date()}
-                    mode="date"
-                    minimumDate={new Date()}
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={(_event: any, d?: Date) => {
-                      setShowDatePicker(false);
-                      if (d) {
-                        setSelectedDate(d);
-                        setErrors(prev => ({ ...prev, date: undefined }));
-                      }
-                    }}
-                  />
-                )}
-              </>
-            )}
-            {!!errors.date && <Text style={styles.errorText}>⚠️ {errors.date}</Text>}
+            <View style={styles.dateRow}>
+              <TextInput
+                ref={dayRef}
+                style={[styles.input, styles.dateInput, !!errors.date && styles.inputError]}
+                placeholder="DD"
+                value={day}
+                onChangeText={(text) => {
+                  const next = text.replace(/\D/g, '').slice(0, 2);
+                  setDay(next);
+                  if (next.length === 2) monthRef.current?.focus();
+                  setErrors((prev) => ({ ...prev, date: undefined }));
+                }}
+                keyboardType="numeric"
+                maxLength={2}
+                placeholderTextColor="#9CA3AF"
+              />
+              <Text style={styles.dateSep}>/</Text>
+              <TextInput
+                ref={monthRef}
+                style={[styles.input, styles.dateInput, !!errors.date && styles.inputError]}
+                placeholder="MM"
+                value={month}
+                onChangeText={(text) => {
+                  const next = text.replace(/\D/g, '').slice(0, 2);
+                  setMonth(next);
+                  if (next.length === 2) yearRef.current?.focus();
+                  setErrors((prev) => ({ ...prev, date: undefined }));
+                }}
+                keyboardType="numeric"
+                maxLength={2}
+                placeholderTextColor="#9CA3AF"
+              />
+              <Text style={styles.dateSep}>/</Text>
+              <TextInput
+                ref={yearRef}
+                style={[styles.input, styles.dateInputYear, !!errors.date && styles.inputError]}
+                placeholder="YYYY"
+                value={year}
+                onChangeText={(text) => {
+                  setYear(text.replace(/\D/g, '').slice(0, 4));
+                  setErrors((prev) => ({ ...prev, date: undefined }));
+                }}
+                keyboardType="numeric"
+                maxLength={4}
+                placeholderTextColor="#9CA3AF"
+              />
+            </View>
+            {!!date && <Text style={styles.dateFormatHint}>Date: {date}</Text>}
+            {!!errors.date && <Text style={styles.errorText}>Warning: {errors.date}</Text>}
 
             <Text style={styles.label}>
               {t('createPlan.time')} <Text style={styles.optional}>{t('createPlan.timeOptional')}</Text>
@@ -379,7 +432,7 @@ export default function CreatePlanScreen() {
                   {t('createPlan.anyTime')}
                 </Text>
               </TouchableOpacity>
-              {TIME_SLOTS.map(slot => (
+              {TIME_SLOTS.map((slot) => (
                 <TouchableOpacity
                   key={slot}
                   style={[styles.timeSlot, timeSlot === slot && styles.timeSlotActive]}
@@ -394,12 +447,10 @@ export default function CreatePlanScreen() {
           </>
         )}
 
-        {/* Find button */}
         <TouchableOpacity style={styles.findButton} onPress={handleFindSuggestions}>
-          <Text style={styles.findButtonText}>🔍 {t('createPlan.findButton')}</Text>
+          <Text style={styles.findButtonText}>{t('createPlan.findButton')}</Text>
         </TouchableOpacity>
 
-        {/* Suggestions */}
         {showSuggestions && (
           <View style={styles.suggestSection}>
             <Text style={styles.suggestTitle}>
@@ -412,30 +463,28 @@ export default function CreatePlanScreen() {
             {loadingSuggest ? (
               <ActivityIndicator size="large" color="#1E88E5" style={{ marginTop: 20 }} />
             ) : (
-              suggestions.map(item => {
+              suggestions.map((item) => {
                 const remaining = item.max_buddies - (item.joined_count ?? 0);
                 const isFull = remaining <= 0;
                 return (
                   <View key={item.id} style={styles.planCard}>
                     <View style={styles.planHeader}>
-                      <Text style={styles.planEmoji}>{CATEGORY_EMOJI[item.category] ?? '📍'}</Text>
+                      <Text style={styles.planEmoji}>{CATEGORY_EMOJI[item.category] ?? '\u{1F4CD}'}</Text>
                       <View style={styles.planHeaderText}>
                         <Text style={styles.planTitle} numberOfLines={1}>{item.title}</Text>
-                        <Text style={styles.planLocation}>📍 {item.location_text}</Text>
+                        <Text style={styles.planLocation}>Location: {item.location_text}</Text>
                       </View>
                       <View style={[styles.slotBadge, isFull && styles.slotBadgeFull]}>
                         <Text style={[styles.slotText, isFull && styles.slotTextFull]}>
-                            {isFull
-                            ? t('createPlan.full')
-                            : `${item.joined_count ?? 0}/${item.max_buddies} buddy`}
+                          {isFull ? t('createPlan.full') : `${item.joined_count ?? 0}/${item.max_buddies} buddy`}
                         </Text>
                       </View>
                     </View>
-                    <Text style={styles.planTime}>🕐 {formatTime(item.scheduled_at)}</Text>
+                    <Text style={styles.planTime}>Time: {formatTime(item.scheduled_at)}</Text>
                     <View style={styles.reasonsRow}>
-                      {item.matchReasons.map((r, i) => (
-                        <View key={i} style={styles.reasonChip}>
-                          <Text style={styles.reasonText}>{reasonLabel(r)}</Text>
+                      {item.matchReasons.map((reason, index) => (
+                        <View key={`${item.id}-${reason}-${index}`} style={styles.reasonChip}>
+                          <Text style={styles.reasonText}>{reasonLabel(reason)}</Text>
                         </View>
                       ))}
                     </View>
@@ -452,7 +501,7 @@ export default function CreatePlanScreen() {
                           ? t('createPlan.joining')
                           : isFull
                             ? t('createPlan.full')
-                            : `👋 ${t('createPlan.join')}`}
+                            : t('createPlan.join')}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -465,24 +514,21 @@ export default function CreatePlanScreen() {
         <View style={{ height: 80 }} />
       </ScrollView>
 
-      {/* Sticky bottom — hiện từ đầu */}
       {!loadingSuggest && (
         <View style={styles.stickyBottom}>
           <TouchableOpacity style={styles.createOwnButton} onPress={openCreateModal}>
-            <Text style={styles.createOwnText}>➕ {t('createPlan.createOwn')}</Text>
+            <Text style={styles.createOwnText}>{t('createPlan.createOwn')}</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Create Plan Modal */}
       <Modal visible={showCreateModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.safeArea}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
             <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-
               <View style={styles.modalHeader}>
                 <TouchableOpacity onPress={() => setShowCreateModal(false)} style={styles.backButton}>
-                  <Text style={styles.backText}>✕</Text>
+                  <Text style={styles.backText}>âœ•</Text>
                 </TouchableOpacity>
                 <Text style={styles.title}>{t('createPlan.modalTitle')}</Text>
               </View>
@@ -490,12 +536,11 @@ export default function CreatePlanScreen() {
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryText}>
                   {CATEGORY_EMOJI[category]} {t(`categories.${category}`)}
-                  {timeSlot ? ` • ${timeSlot}` : ` • ${t('createPlan.anyTime')}`}
-                  {date ? ` • ${date}` : ''}
+                  {timeSlot ? ` | ${timeSlot}` : ` | ${t('createPlan.anyTime')}`}
+                  {date ? ` | ${date}` : ''}
                 </Text>
               </View>
 
-              {/* Place search = title */}
               <Text style={styles.label}>{t('createPlan.planTitleLabel')}</Text>
               <View>
                 <TextInput
@@ -514,17 +559,16 @@ export default function CreatePlanScreen() {
                 )}
               </View>
 
-              {/* Place suggestions dropdown */}
               {placeSuggestions.length > 0 && (
                 <View style={styles.placeSuggestBox}>
-                  {placeSuggestions.map(place => (
+                  {placeSuggestions.map((place) => (
                     <TouchableOpacity
                       key={place.id}
                       style={styles.placeSuggestItem}
                       onPress={() => handleSelectPlace(place)}
                     >
                       <Text style={styles.placeSuggestName} numberOfLines={1}>
-                        {CATEGORY_EMOJI[place.category] ?? '📍'} {place.name}
+                        {CATEGORY_EMOJI[place.category] ?? '\u{1F4CD}'} {place.name}
                       </Text>
                       <Text style={styles.placeSuggestAddr} numberOfLines={1}>
                         {place.address}
@@ -534,7 +578,6 @@ export default function CreatePlanScreen() {
                 </View>
               )}
 
-              {/* Area */}
               <Text style={styles.label}>{t('createPlan.area')}</Text>
               <TextInput
                 style={styles.input}
@@ -544,7 +587,6 @@ export default function CreatePlanScreen() {
                 placeholderTextColor="#9CA3AF"
               />
 
-              {/* Description */}
               <Text style={styles.label}>{t('createPlan.descriptionLabel')}</Text>
               <TextInput
                 style={[styles.input, styles.inputMultiline]}
@@ -557,14 +599,13 @@ export default function CreatePlanScreen() {
                 placeholderTextColor="#9CA3AF"
               />
 
-              {/* Max buddies */}
               <Text style={styles.label}>{t('createPlan.maxBuddies')}</Text>
               <View style={styles.buddyRow}>
                 <TouchableOpacity
                   style={styles.buddyButton}
                   onPress={() => setMaxBuddies(Math.max(1, maxBuddies - 1))}
                 >
-                  <Text style={styles.buddyButtonText}>−</Text>
+                  <Text style={styles.buddyButtonText}>-</Text>
                 </TouchableOpacity>
                 <Text style={styles.buddyCount}>{maxBuddies}</Text>
                 <TouchableOpacity
@@ -577,10 +618,9 @@ export default function CreatePlanScreen() {
 
               <TouchableOpacity style={styles.submitButton} onPress={handleCreatePlan} disabled={creating}>
                 <Text style={styles.submitButtonText}>
-                  {creating ? t('createPlan.publishing') : `🚀 ${t('createPlan.publish')}`}
+                  {creating ? t('createPlan.publishing') : t('createPlan.publish')}
                 </Text>
               </TouchableOpacity>
-
             </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
@@ -611,12 +651,13 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8, marginTop: 14 },
   optional: { fontSize: 12, color: '#9CA3AF', fontWeight: '400' },
   input: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 14, fontSize: 15, color: '#1A1A1A', backgroundColor: '#F9FAFB' },
-  datePickerButton: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 14, backgroundColor: '#F9FAFB' },
-  datePickerButtonError: { borderColor: '#DC2626', backgroundColor: '#FEF2F2' },
-  datePickerText: { fontSize: 15, color: '#1A1A1A', fontWeight: '600' },
-  datePickerPlaceholder: { color: '#9CA3AF', fontWeight: '400' },
+  inputError: { borderColor: '#DC2626', backgroundColor: '#FEF2F2' },
   fieldError: { borderRadius: 14, borderWidth: 1.5, borderColor: '#DC2626' },
   errorText: { color: '#DC2626', fontSize: 12, fontWeight: '500', marginTop: 6 },
+  dateRow: { flexDirection: 'row', alignItems: 'center' },
+  dateSep: { marginHorizontal: 8, color: '#9CA3AF', fontWeight: '700', fontSize: 16 },
+  dateInput: { width: 72, textAlign: 'center' },
+  dateInputYear: { width: 110, textAlign: 'center' },
   dateFormatHint: { fontSize: 13, color: '#1E88E5', fontWeight: '600', marginTop: 6 },
   inputMultiline: { minHeight: 80 },
   timeSlotList: { marginBottom: 4 },

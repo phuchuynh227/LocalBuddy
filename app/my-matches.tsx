@@ -54,16 +54,24 @@ export default function MyMatchesScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(async () => {
+    if (!user?.id) {
+      setMatches([]);
+      setPendingRequests([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     const [matchRes, requestRes] = await Promise.all([
       supabase
         .from('matches')
         .select('*, plans(id, title, category, location_text, scheduled_at)')
-        .eq('user2_id', user?.id)
+        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
         .order('created_at', { ascending: false }),
       supabase
         .from('plan_requests')
         .select('id, status, created_at, plans(id, title, category, location_text, scheduled_at)')
-        .eq('requester_id', user?.id)
+        .eq('requester_id', user.id)
         .eq('status', 'pending')
         .order('created_at', { ascending: false }),
     ]);
