@@ -1,4 +1,4 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Entypo } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
@@ -33,7 +33,7 @@ export default function ProfileScreen() {
             onPress={() => router.push('/notifications' as any)}
             activeOpacity={0.9}
           >
-            <Ionicons name="notifications-outline" size={20} color={PRIMARY_BLUE} />
+            <Entypo name="bell" size={20} color={PRIMARY_BLUE} />
             {unreadCount > 0 && (
               <View style={styles.topBadge}>
                 <Text style={styles.topBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
@@ -59,22 +59,17 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('profile.activity')}</Text>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/my-plans' as any)}>
-            <MaterialCommunityIcons
-              name="clipboard-text-outline"
-              size={20}
-              color={PRIMARY_BLUE}
-              style={styles.menuIcon}
-            />
+            <Entypo name="clipboard" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
             <Text style={styles.menuLabel}>{t('myPlans.title')}</Text>
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/my-matches' as any)}>
-            <Ionicons name="people-outline" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
+            <Entypo name="users" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
             <Text style={styles.menuLabel}>{t('profile.myMatches')}</Text>
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/my-reviews' as any)}>
-            <Ionicons name="create-outline" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
+            <Entypo name="edit" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
             <Text style={styles.menuLabel}>{t('profile.myReviews')}</Text>
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
@@ -83,7 +78,7 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('profile.settings')}</Text>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/notifications' as any)}>
-            <Ionicons name="notifications-outline" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
+            <Entypo name="bell" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
             <Text style={styles.menuLabel}>{t('profile.notifications')}</Text>
             {unreadCount > 0 && (
               <View style={styles.badge}>
@@ -93,7 +88,7 @@ export default function ProfileScreen() {
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/change-password' as any)}>
-            <Ionicons name="lock-closed-outline" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
+            <Entypo name="lock" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
             <Text style={styles.menuLabel}>{t('profile.changePassword')}</Text>
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>

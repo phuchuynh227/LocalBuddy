@@ -1,4 +1,4 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Entypo } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
@@ -14,12 +14,12 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useNotifications } from '../../context/NotificationContext';
 
 const CATEGORIES = [
-  { key: 'cafe', iconSet: 'Ionicons', iconName: 'cafe-outline' },
-  { key: 'gym', iconSet: 'MaterialCommunityIcons', iconName: 'dumbbell' },
-  { key: 'movies', iconSet: 'Ionicons', iconName: 'film-outline' },
-  { key: 'park', iconSet: 'MaterialCommunityIcons', iconName: 'tree-outline' },
-  { key: 'food', iconSet: 'Ionicons', iconName: 'restaurant-outline' },
-  { key: 'study', iconSet: 'Ionicons', iconName: 'book-outline' },
+  { key: 'cafe', iconName: 'cup' },
+  { key: 'gym', iconName: 'sports-club' },
+  { key: 'movies', iconName: 'clapperboard' },
+  { key: 'park', iconName: 'tree' },
+  { key: 'food', iconName: 'bowl' },
+  { key: 'study', iconName: 'open-book' },
 ];
 
 export default function HomeScreen() {
@@ -42,7 +42,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/notifications' as any)}
               activeOpacity={0.9}
             >
-              <Ionicons name="notifications-outline" size={20} color={PRIMARY_BLUE} />
+              <Entypo name="bell" size={20} color={PRIMARY_BLUE} />
               {unreadCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
@@ -95,21 +95,12 @@ export default function HomeScreen() {
                 activeOpacity={0.9}
                 onPress={() => router.push(`/places?category=${item.key}` as any)}
               >
-                {item.iconSet === 'MaterialCommunityIcons' ? (
-                  <MaterialCommunityIcons
-                    name={item.iconName as any}
-                    size={24}
-                    color={PRIMARY_BLUE}
-                    style={styles.categoryIcon}
-                  />
-                ) : (
-                  <Ionicons
-                    name={item.iconName as any}
-                    size={24}
-                    color={PRIMARY_BLUE}
-                    style={styles.categoryIcon}
-                  />
-                )}
+                <Entypo
+                  name={item.iconName as any}
+                  size={22}
+                  color={PRIMARY_BLUE}
+                  style={styles.categoryIcon}
+                />
                 <Text style={styles.categoryLabel}>{t(`categories.${item.key}`)}</Text>
               </TouchableOpacity>
             ))}

@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons'
+import { Entypo } from '@expo/vector-icons'
 import { Redirect, Tabs } from 'expo-router'
 import { useAuth } from '../../context/AuthContext'
 import { useLanguage } from '../../context/LanguageContext'
@@ -25,7 +25,7 @@ export default function TabLayout() {
         options={{
           title: t('tabs.home'),
           tabBarLabel: t('tabs.home'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Entypo name="home" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -33,7 +33,7 @@ export default function TabLayout() {
         options={{
           title: t('tabs.explore'),
           tabBarLabel: t('tabs.explore'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="search-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Entypo name="magnifying-glass" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -41,7 +41,7 @@ export default function TabLayout() {
         options={{
           title: t('tabs.profile'),
           tabBarLabel: t('tabs.profile'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Entypo name="user" size={size} color={color} />,
         }}
       />
     </Tabs>

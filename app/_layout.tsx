@@ -32,7 +32,7 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   webPage: {
     flex: 1,
-    backgroundColor: '#EEF3F8',
+    backgroundColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 24,
@@ -47,10 +47,10 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 10 },
+    borderColor: '#CBD5E1',
+    shadowColor: '#020617',
+    shadowOpacity: 0.32,
+    shadowRadius: 36,
+    shadowOffset: { width: 0, height: 18 },
   },
 })

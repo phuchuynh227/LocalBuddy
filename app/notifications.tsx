@@ -1,4 +1,4 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Entypo } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import {
@@ -51,13 +51,13 @@ export default function NotificationsScreen() {
     >
       <View style={styles.iconWrap}>
         {item.type === 'approval' && (
-          <Ionicons name="hourglass-outline" size={18} color="#1E88E5" />
+          <Entypo name="hour-glass" size={18} color="#1E88E5" />
         )}
         {item.type === 'cancelled' && (
-          <Ionicons name="close-circle-outline" size={18} color="#1E88E5" />
+          <Entypo name="circle-with-cross" size={18} color="#1E88E5" />
         )}
         {item.type === 'message' && (
-          <MaterialCommunityIcons name="message-text-outline" size={18} color="#1E88E5" />
+          <Entypo name="message" size={18} color="#1E88E5" />
         )}
       </View>
       <View style={styles.content}>
@@ -77,7 +77,7 @@ export default function NotificationsScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={18} color="#1E88E5" />
+          <Entypo name="chevron-thin-left" size={18} color="#1E88E5" />
         </TouchableOpacity>
         <View style={styles.headerText}>
           <Text style={styles.title}>{labels.title}</Text>
@@ -100,12 +100,7 @@ export default function NotificationsScreen() {
           contentContainerStyle={notifications.length === 0 ? styles.emptyContainer : styles.list}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Ionicons
-                name="notifications-off-outline"
-                size={32}
-                color="#9CA3AF"
-                style={styles.emptyIcon}
-              />
+              <Entypo name="notifications-off" size={32} color="#9CA3AF" style={styles.emptyIcon} />
               <Text style={styles.emptyTitle}>{labels.empty}</Text>
               <Text style={styles.emptySubtitle}>{labels.emptySubtitle}</Text>
             </View>
