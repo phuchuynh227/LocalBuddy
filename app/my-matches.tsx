@@ -1,22 +1,26 @@
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    RefreshControl,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
 
 const CATEGORY_EMOJI: Record<string, string> = {
-  cafe: '☕', gym: '🏋️', movies: '🎬',
-  park: '🌳', food: '🍽️', study: '📚',
+  cafe: '\u2615',
+  gym: '\u{1F3CB}\uFE0F',
+  movies: '\u{1F3AC}',
+  park: '\u{1F333}',
+  food: '\u{1F37D}\uFE0F',
+  study: '\u{1F4DA}',
 };
 
 type PlanInfo = {
@@ -46,12 +50,28 @@ type PendingRequest = {
 export default function MyMatchesScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const labels = useMemo(() => ({
+    empty: language === 'vn' ? 'Chua co match nao' : 'No matches yet',
+    emptySubtitle: language === 'vn'
+      ? 'Tao plan hoac tham gia plan cua nguoi khac de tim buddy.'
+      : 'Create a plan or join someone else to find a buddy.',
+    pendingSection: language === 'vn' ? 'Dang cho xac nhan' : 'Waiting for confirmation',
+    matchedSection: language === 'vn' ? 'Da match' : 'Matched',
+    pendingBadge: language === 'vn' ? 'Cho duyet' : 'Pending',
+    matchedBadge: language === 'vn' ? 'Da match' : 'Matched',
+    yourBuddy: language === 'vn' ? 'Buddy cua ban' : 'Your buddy',
+    chatWithBuddy: language === 'vn' ? 'Nhan tin voi buddy' : 'Message buddy',
+    planFallback: language === 'vn' ? 'Plan' : 'Plan',
+    locationPrefix: language === 'vn' ? 'Dia diem:' : 'Location:',
+    timePrefix: language === 'vn' ? 'Thoi gian:' : 'Time:',
+  }), [language]);
 
   const fetchData = useCallback(async () => {
     if (!user?.id) {
@@ -82,16 +102,21 @@ export default function MyMatchesScreen() {
     setRefreshing(false);
   }, [user?.id]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  const onRefresh = () => { setRefreshing(true); fetchData(); };
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
 
   const getBuddyId = (match: Match) =>
     match.user1_id === user?.id ? match.user2_id : match.user1_id;
 
   const formatTime = (iso: string) => {
-    const d = new Date(iso);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} — ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+    const date = new Date(iso);
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')} - ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
   };
 
   const isEmpty = matches.length === 0 && pendingRequests.length === 0;
@@ -99,10 +124,9 @@ export default function MyMatchesScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backText}>←</Text>
+            <Text style={styles.backText}>{'<'}</Text>
           </TouchableOpacity>
           <Text style={styles.title}>{t('profile.myMatches')}</Text>
         </View>
@@ -113,16 +137,14 @@ export default function MyMatchesScreen() {
           </View>
         ) : isEmpty ? (
           <View style={styles.center}>
-            <Text style={styles.emptyEmoji}>🤝</Text>
-            <Text style={styles.emptyTitle}>Chưa có match nào</Text>
-            <Text style={styles.emptySubtitle}>
-              Tạo plan hoặc join plan của người khác để có buddy!
-            </Text>
+            <Text style={styles.emptyEmoji}>...</Text>
+            <Text style={styles.emptyTitle}>{labels.empty}</Text>
+            <Text style={styles.emptySubtitle}>{labels.emptySubtitle}</Text>
             <TouchableOpacity
               style={styles.createButton}
               onPress={() => router.push('/create-plan' as any)}
             >
-              <Text style={styles.createButtonText}>➕ Tìm buddy</Text>
+              <Text style={styles.createButtonText}>{t('home.findBuddy')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -133,29 +155,28 @@ export default function MyMatchesScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1E88E5']} />
             }
           >
-            {/* Pending section */}
             {pendingRequests.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionLabel}>
-                  ⏳ Đang chờ xác nhận ({pendingRequests.length})
+                  {labels.pendingSection} ({pendingRequests.length})
                 </Text>
-                {pendingRequests.map(req => (
-                  <View key={req.id} style={styles.pendingCard}>
+                {pendingRequests.map((request) => (
+                  <View key={request.id} style={styles.pendingCard}>
                     <View style={styles.cardHeader}>
                       <Text style={styles.cardEmoji}>
-                        {CATEGORY_EMOJI[req.plans?.category ?? ''] ?? '📍'}
+                        {CATEGORY_EMOJI[request.plans?.category ?? ''] ?? '\u{1F4CD}'}
                       </Text>
                       <View style={styles.cardInfo}>
                         <Text style={styles.cardTitle} numberOfLines={1}>
-                          {req.plans?.title ?? 'Plan'}
+                          {request.plans?.title ?? labels.planFallback}
                         </Text>
-                        <Text style={styles.cardMeta}>📍 {req.plans?.location_text ?? ''}</Text>
+                        <Text style={styles.cardMeta}>{labels.locationPrefix} {request.plans?.location_text ?? ''}</Text>
                         <Text style={styles.cardMeta}>
-                          🕐 {req.plans?.scheduled_at ? formatTime(req.plans.scheduled_at) : ''}
+                          {labels.timePrefix} {request.plans?.scheduled_at ? formatTime(request.plans.scheduled_at) : ''}
                         </Text>
                       </View>
                       <View style={styles.pendingBadge}>
-                        <Text style={styles.pendingBadgeText}>⏳ Chờ duyệt</Text>
+                        <Text style={styles.pendingBadgeText}>{labels.pendingBadge}</Text>
                       </View>
                     </View>
                   </View>
@@ -163,36 +184,34 @@ export default function MyMatchesScreen() {
               </View>
             )}
 
-            {/* Matched section */}
             {matches.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionLabel}>
-                  🤝 Đã match ({matches.length})
+                  {labels.matchedSection} ({matches.length})
                 </Text>
-                {matches.map(item => {
+                {matches.map((item) => {
                   const buddyId = getBuddyId(item);
                   const plan = item.plans;
                   return (
                     <View key={item.id} style={styles.matchCard}>
                       <View style={styles.cardHeader}>
                         <Text style={styles.cardEmoji}>
-                          {CATEGORY_EMOJI[plan?.category ?? ''] ?? '📍'}
+                          {CATEGORY_EMOJI[plan?.category ?? ''] ?? '\u{1F4CD}'}
                         </Text>
                         <View style={styles.cardInfo}>
                           <Text style={styles.cardTitle} numberOfLines={1}>
-                            {plan?.title ?? 'Plan'}
+                            {plan?.title ?? labels.planFallback}
                           </Text>
-                          <Text style={styles.cardMeta}>📍 {plan?.location_text ?? ''}</Text>
+                          <Text style={styles.cardMeta}>{labels.locationPrefix} {plan?.location_text ?? ''}</Text>
                           <Text style={styles.cardMeta}>
-                            🕐 {plan?.scheduled_at ? formatTime(plan.scheduled_at) : ''}
+                            {labels.timePrefix} {plan?.scheduled_at ? formatTime(plan.scheduled_at) : ''}
                           </Text>
                         </View>
                         <View style={styles.matchedBadge}>
-                          <Text style={styles.matchedBadgeText}>🤝 Matched</Text>
+                          <Text style={styles.matchedBadgeText}>{labels.matchedBadge}</Text>
                         </View>
                       </View>
 
-                      {/* Buddy row */}
                       <View style={styles.buddyRow}>
                         <View style={styles.buddyAvatar}>
                           <Text style={styles.buddyAvatarText}>
@@ -200,7 +219,7 @@ export default function MyMatchesScreen() {
                           </Text>
                         </View>
                         <View style={styles.buddyInfo}>
-                          <Text style={styles.buddyLabel}>Buddy của bạn</Text>
+                          <Text style={styles.buddyLabel}>{labels.yourBuddy}</Text>
                           <Text style={styles.buddyId}>#{buddyId.slice(0, 8)}</Text>
                         </View>
                       </View>
@@ -208,10 +227,10 @@ export default function MyMatchesScreen() {
                       <TouchableOpacity
                         style={styles.chatButton}
                         onPress={() => router.push(
-                          `/chat?matchUserId=${buddyId}&planTitle=${encodeURIComponent(plan?.title ?? 'Plan')}` as any
+                          `/chat?matchUserId=${buddyId}&planTitle=${encodeURIComponent(plan?.title ?? labels.planFallback)}` as any
                         )}
                       >
-                        <Text style={styles.chatButtonText}>💬 Nhắn tin với buddy</Text>
+                        <Text style={styles.chatButtonText}>{labels.chatWithBuddy}</Text>
                       </TouchableOpacity>
                     </View>
                   );
@@ -258,7 +277,7 @@ const styles = StyleSheet.create({
   chatButton: { backgroundColor: PRIMARY_BLUE, borderRadius: 12, padding: 12, alignItems: 'center' },
   chatButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 60 },
-  emptyEmoji: { fontSize: 48, marginBottom: 16 },
+  emptyEmoji: { fontSize: 32, marginBottom: 16, color: '#9CA3AF' },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: '#1A1A1A', marginBottom: 8 },
   emptySubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 24, paddingHorizontal: 20 },
   createButton: { backgroundColor: PRIMARY_BLUE, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },

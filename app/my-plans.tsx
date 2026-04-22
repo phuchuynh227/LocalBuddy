@@ -1,23 +1,28 @@
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    RefreshControl,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Platform,
+  RefreshControl,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
 
 const CATEGORY_EMOJI: Record<string, string> = {
-  cafe: '☕', gym: '🏋️', movies: '🎬',
-  park: '🌳', food: '🍽️', study: '📚',
+  cafe: '\u2615',
+  gym: '\u{1F3CB}\uFE0F',
+  movies: '\u{1F3AC}',
+  park: '\u{1F333}',
+  food: '\u{1F37D}\uFE0F',
+  study: '\u{1F4DA}',
 };
 
 type Request = {
@@ -26,7 +31,6 @@ type Request = {
   status: string;
   message: string;
   created_at: string;
-  requester_email?: string;
 };
 
 type Plan = {
@@ -40,17 +44,52 @@ type Plan = {
   plan_requests: Request[];
 };
 
+async function confirmAction(title: string, message: string, confirmLabel: string) {
+  if (Platform.OS === 'web') {
+    return globalThis.confirm?.(`${title}\n\n${message}`) ?? false;
+  }
+
+  return await new Promise<boolean>((resolve) => {
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+      { text: confirmLabel, style: 'destructive', onPress: () => resolve(true) },
+    ]);
+  });
+}
+
+function showMessage(title: string, message: string) {
+  if (Platform.OS === 'web') {
+    globalThis.alert?.(`${title}\n${message}`);
+    return;
+  }
+  Alert.alert(title, message);
+}
+
 export default function MyPlansScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
 
+  const labels = useMemo(() => ({
+    buddyPrefix: language === 'vn' ? 'Buddy' : 'Buddy',
+    locationPrefix: language === 'vn' ? 'Dia diem:' : 'Location:',
+    timePrefix: language === 'vn' ? 'Thoi gian:' : 'Time:',
+    requestActionPrefix: language === 'vn' ? 'Tham gia:' : 'Join:',
+  }), [language]);
+
   const fetchPlans = useCallback(async () => {
+    if (!user?.id) {
+      setPlans([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('plans')
       .select(`
@@ -59,7 +98,7 @@ export default function MyPlansScreen() {
           id, requester_id, status, message, created_at
         )
       `)
-      .eq('host_id', user?.id)
+      .eq('host_id', user.id)
       .order('scheduled_at', { ascending: true });
 
     if (!error && data) setPlans(data as Plan[]);
@@ -67,83 +106,93 @@ export default function MyPlansScreen() {
     setRefreshing(false);
   }, [user?.id]);
 
-  useEffect(() => { fetchPlans(); }, [fetchPlans]);
+  useEffect(() => {
+    fetchPlans();
+  }, [fetchPlans]);
 
-  const onRefresh = () => { setRefreshing(true); fetchPlans(); };
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchPlans();
+  };
 
   const handleAccept = async (request: Request, plan: Plan) => {
-    const acceptedCount = plan.plan_requests.filter(r => r.status === 'accepted').length;
+    const acceptedCount = plan.plan_requests.filter((item) => item.status === 'accepted').length;
     if (acceptedCount >= plan.max_buddies) {
-      Alert.alert('Đầy chỗ', 'Plan đã đủ buddy rồi!');
+      showMessage(t('writeReview.errorTitle'), t('myPlans.fullAlert'));
       return;
     }
-    setProcessing(request.id);
 
+    setProcessing(request.id);
     const { error } = await supabase
       .from('plan_requests')
       .update({ status: 'accepted' })
       .eq('id', request.id);
 
     if (!error) {
-      // Tạo match record
-      await supabase.from('matches').upsert ({
+      await supabase.from('matches').upsert({
         plan_id: plan.id,
         user1_id: user?.id,
         user2_id: request.requester_id,
       });
 
-      // Nếu đã đủ buddy → đóng plan
       if (acceptedCount + 1 >= plan.max_buddies) {
         await supabase.from('plans').update({ status: 'full' }).eq('id', plan.id);
       }
 
       fetchPlans();
     } else {
-      Alert.alert('Lỗi', 'Không thể xác nhận, thử lại nhé!');
+      showMessage(t('writeReview.errorTitle'), t('createPlan.errorRequest'));
     }
+
     setProcessing(null);
   };
 
   const handleDecline = async (request: Request) => {
-    Alert.alert('Từ chối?', 'Bạn chắc chắn muốn từ chối request này?', [
-      { text: 'Huỷ', style: 'cancel' },
-      {
-        text: 'Từ chối', style: 'destructive',
-        onPress: async () => {
-          setProcessing(request.id);
-          await supabase
-            .from('plan_requests')
-            .update({ status: 'declined' })
-            .eq('id', request.id);
-          fetchPlans();
-          setProcessing(null);
-        }
-      }
-    ]);
+    const confirmed = await confirmAction(
+      t('myPlans.declineConfirm'),
+      t('myPlans.declineConfirmMsg'),
+      t('myPlans.decline'),
+    );
+    if (!confirmed) return;
+
+    setProcessing(request.id);
+    await supabase
+      .from('plan_requests')
+      .update({ status: 'declined' })
+      .eq('id', request.id);
+    fetchPlans();
+    setProcessing(null);
   };
 
   const handleCancelPlan = async (planId: string) => {
-    Alert.alert('Huỷ plan?', 'Bạn chắc chắn muốn huỷ plan này?', [
-      { text: 'Không', style: 'cancel' },
-      {
-        text: 'Huỷ plan', style: 'destructive',
-        onPress: async () => {
-          await supabase.from('plans').update({ status: 'cancelled' }).eq('id', planId);
-          fetchPlans();
-        }
-      }
-    ]);
+    const confirmed = await confirmAction(
+      t('myPlans.cancelConfirm'),
+      t('myPlans.cancelConfirmMsg'),
+      t('myPlans.cancelPlan'),
+    );
+    if (!confirmed) return;
+
+    setProcessing(planId);
+    const { error } = await supabase.from('plans').update({ status: 'cancelled' }).eq('id', planId);
+    setProcessing(null);
+
+    if (error) {
+      showMessage(t('writeReview.errorTitle'), t('createPlan.errorCreate'));
+      return;
+    }
+
+    fetchPlans();
   };
 
   const formatTime = (iso: string) => {
-    const d = new Date(iso);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} — ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+    const date = new Date(iso);
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')} - ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
   };
 
   const getStatusStyle = (status: string) => {
-    if (status === 'open') return { bg: '#D1FAE5', color: '#065F46', label: 'Đang mở' };
-    if (status === 'full') return { bg: '#FEF3C7', color: '#92400E', label: 'Đã đầy' };
-    if (status === 'cancelled') return { bg: '#FEE2E2', color: '#991B1B', label: 'Đã huỷ' };
+    if (status === 'open') return { bg: '#D1FAE5', color: '#065F46', label: t('myPlans.open') };
+    if (status === 'full') return { bg: '#FEF3C7', color: '#92400E', label: t('myPlans.full') };
+    if (status === 'cancelled') return { bg: '#FEE2E2', color: '#991B1B', label: t('myPlans.cancelled') };
     return { bg: '#F3F4F6', color: '#374151', label: status };
   };
 
@@ -162,27 +211,26 @@ export default function MyPlansScreen() {
           </View>
           <View style={styles.requestInfo}>
             <Text style={styles.requesterId} numberOfLines={1}>
-              Buddy #{request.requester_id.slice(0, 8)}
+              {labels.buddyPrefix} #{request.requester_id.slice(0, 8)}
             </Text>
             <Text style={styles.requestTime}>
-              {new Date(request.created_at).toLocaleDateString('vi-VN')}
+              {new Date(request.created_at).toLocaleDateString(language === 'vn' ? 'vi-VN' : 'en-US')}
             </Text>
           </View>
-          {/* Status badge */}
           {isAccepted && (
             <View style={[styles.statusChip, { backgroundColor: '#D1FAE5' }]}>
-              <Text style={[styles.statusChipText, { color: '#065F46' }]}>Đã accept</Text>
+              <Text style={[styles.statusChipText, { color: '#065F46' }]}>{t('myPlans.accepted')}</Text>
             </View>
           )}
           {isDeclined && (
             <View style={[styles.statusChip, { backgroundColor: '#FEE2E2' }]}>
-              <Text style={[styles.statusChipText, { color: '#991B1B' }]}>Đã từ chối</Text>
+              <Text style={[styles.statusChipText, { color: '#991B1B' }]}>{t('myPlans.declined')}</Text>
             </View>
           )}
         </View>
 
         {!!request.message && (
-          <Text style={styles.requestMessage}>"{request.message}"</Text>
+          <Text style={styles.requestMessage}>{request.message}</Text>
         )}
 
         {isPending && (
@@ -192,7 +240,7 @@ export default function MyPlansScreen() {
               onPress={() => handleDecline(request)}
               disabled={processing === request.id}
             >
-              <Text style={styles.declineButtonText}>✕ Từ chối</Text>
+              <Text style={styles.declineButtonText}>{t('myPlans.decline')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.acceptButton}
@@ -200,8 +248,8 @@ export default function MyPlansScreen() {
               disabled={processing === request.id}
             >
               <Text style={styles.acceptButtonText}>
-                {processing === request.id ? '...' : `✓ ${t('myPlans.accept')}`}
-            </Text>
+                {processing === request.id ? '...' : t('myPlans.accept')}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -211,7 +259,7 @@ export default function MyPlansScreen() {
             style={styles.chatButton}
             onPress={() => router.push(`/chat?matchUserId=${request.requester_id}&planTitle=${encodeURIComponent(plan.title)}` as any)}
           >
-            <Text style={styles.chatButtonText}>💬 Nhắn tin</Text>
+            <Text style={styles.chatButtonText}>{t('myPlans.chat')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -220,18 +268,17 @@ export default function MyPlansScreen() {
 
   const renderPlan = ({ item }: { item: Plan }) => {
     const statusStyle = getStatusStyle(item.status);
-    const pendingRequests = item.plan_requests.filter(r => r.status === 'pending');
-    const acceptedRequests = item.plan_requests.filter(r => r.status === 'accepted');
+    const pendingRequests = item.plan_requests.filter((request) => request.status === 'pending');
+    const acceptedRequests = item.plan_requests.filter((request) => request.status === 'accepted');
 
     return (
       <View style={styles.planCard}>
-        {/* Plan header */}
         <View style={styles.planHeader}>
-          <Text style={styles.planEmoji}>{CATEGORY_EMOJI[item.category] ?? '📍'}</Text>
+          <Text style={styles.planEmoji}>{CATEGORY_EMOJI[item.category] ?? '\u{1F4CD}'}</Text>
           <View style={styles.planInfo}>
             <Text style={styles.planTitle} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.planMeta}>📍 {item.location_text}</Text>
-            <Text style={styles.planMeta}>🕐 {formatTime(item.scheduled_at)}</Text>
+            <Text style={styles.planMeta}>{labels.locationPrefix} {item.location_text}</Text>
+            <Text style={styles.planMeta}>{labels.timePrefix} {formatTime(item.scheduled_at)}</Text>
           </View>
           <View style={[styles.planStatusBadge, { backgroundColor: statusStyle.bg }]}>
             <Text style={[styles.planStatusText, { color: statusStyle.color }]}>
@@ -240,41 +287,41 @@ export default function MyPlansScreen() {
           </View>
         </View>
 
-        {/* Stats row */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{acceptedRequests.length}/{item.max_buddies}</Text>
-            <Text style={styles.statLabel}>Buddy</Text>
+            <Text style={styles.statLabel}>{t('myPlans.buddySlots')}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={[styles.statValue, pendingRequests.length > 0 && styles.statValueAlert]}>
               {pendingRequests.length}
             </Text>
-            <Text style={styles.statLabel}>Chờ duyệt</Text>
+            <Text style={styles.statLabel}>{t('myPlans.pending')}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{item.plan_requests.length}</Text>
-            <Text style={styles.statLabel}>Tổng requests</Text>
+            <Text style={styles.statLabel}>{t('myPlans.totalRequests')}</Text>
           </View>
         </View>
 
-        {/* Requests */}
         {item.plan_requests.length > 0 && (
           <View style={styles.requestsSection}>
-            <Text style={styles.requestsSectionTitle}>Requests</Text>
-            {item.plan_requests.map(req => renderRequest(req, item))}
+            <Text style={styles.requestsSectionTitle}>{t('myPlans.requests')}</Text>
+            {item.plan_requests.map((request) => renderRequest(request, item))}
           </View>
         )}
 
-        {/* Cancel plan */}
         {item.status === 'open' && (
           <TouchableOpacity
             style={styles.cancelPlanButton}
             onPress={() => handleCancelPlan(item.id)}
+            disabled={processing === item.id}
           >
-            <Text style={styles.cancelPlanText}>Huỷ plan</Text>
+            <Text style={styles.cancelPlanText}>
+              {processing === item.id ? '...' : t('myPlans.cancelPlan')}
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -284,12 +331,11 @@ export default function MyPlansScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backText}>←</Text>
+            <Text style={styles.backText}>{'<'}</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Plans của tôi</Text>
+          <Text style={styles.title}>{t('myPlans.title')}</Text>
         </View>
 
         {loading ? (
@@ -299,21 +345,21 @@ export default function MyPlansScreen() {
         ) : (
           <FlatList
             data={plans}
-            keyExtractor={item => item.id}
+            keyExtractor={(item) => item.id}
             renderItem={renderPlan}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.list}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1E88E5']} />}
             ListEmptyComponent={
               <View style={styles.center}>
-                <Text style={styles.emptyEmoji}>📋</Text>
-                <Text style={styles.emptyTitle}>Chưa có plan nào</Text>
-                <Text style={styles.emptySubtitle}>Tạo plan đầu tiên để tìm buddy nhé!</Text>
+                <Text style={styles.emptyEmoji}>...</Text>
+                <Text style={styles.emptyTitle}>{t('myPlans.empty')}</Text>
+                <Text style={styles.emptySubtitle}>{t('myPlans.emptySubtitle')}</Text>
                 <TouchableOpacity
                   style={styles.createButton}
                   onPress={() => router.push('/create-plan' as any)}
                 >
-                  <Text style={styles.createButtonText}>➕ Tạo plan</Text>
+                  <Text style={styles.createButtonText}>{t('myPlans.createPlan')}</Text>
                 </TouchableOpacity>
               </View>
             }
@@ -371,7 +417,7 @@ const styles = StyleSheet.create({
   cancelPlanButton: { alignItems: 'center', paddingVertical: 8 },
   cancelPlanText: { fontSize: 13, color: '#DC2626', fontWeight: '600' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 60 },
-  emptyEmoji: { fontSize: 48, marginBottom: 16 },
+  emptyEmoji: { fontSize: 32, marginBottom: 16, color: '#9CA3AF' },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: '#1A1A1A', marginBottom: 8 },
   emptySubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 24 },
   createButton: { backgroundColor: PRIMARY_BLUE, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },
