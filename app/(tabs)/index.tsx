@@ -9,6 +9,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { ProfileCompletionBanner } from '../../components/ProfileCompletionBanner';
+import { UserAvatar } from '../../components/UserAvatar';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -23,7 +25,7 @@ const CATEGORIES = [
 ];
 
 export default function HomeScreen() {
-  const { user, signOut } = useAuth();
+  const { user, profile, profileCompleted, signOut } = useAuth();
   const router = useRouter();
   const { language, toggleLanguage, t } = useLanguage();
   const { unreadCount } = useNotifications();
@@ -55,9 +57,7 @@ export default function HomeScreen() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.profile} onPress={signOut} activeOpacity={0.9}>
-              <Text style={styles.profileInitials}>
-                {user?.email?.charAt(0).toUpperCase() ?? 'LB'}
-              </Text>
+              <UserAvatar profile={profile} fallbackText={user?.email ?? 'LB'} size={40} textSize={16} />
             </TouchableOpacity>
           </View>
         </View>
@@ -107,6 +107,10 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
       </View>
+
+      {!profileCompleted && (
+        <ProfileCompletionBanner onPress={() => router.push('/personal-info' as any)} />
+      )}
     </SafeAreaView>
   );
 }
@@ -153,9 +157,8 @@ const styles = StyleSheet.create({
   langPillText: { fontSize: 13, fontWeight: '700', color: PRIMARY_BLUE },
   appName: { fontSize: 24, fontWeight: '700', color: PRIMARY_BLUE, letterSpacing: 0.5 },
   appSubtitle: { marginTop: 4, fontSize: 13, color: '#6B6B6B' },
-  profile: { width: 40, height: 40, borderRadius: 20, backgroundColor: LIGHT_BLUE, alignItems: 'center', justifyContent: 'center', elevation: 3 },
-  profileInitials: { fontSize: 16, fontWeight: '700', color: PRIMARY_BLUE },
-  scrollContent: { paddingBottom: 32 },
+  profile: { width: 40, height: 40, borderRadius: 20, overflow: 'hidden' },
+  scrollContent: { paddingBottom: 88 },
   planCard: { backgroundColor: LIGHT_BLUE, borderRadius: 20, padding: 20, marginBottom: 24 },
   planTitle: { fontSize: 20, fontWeight: '700', color: PRIMARY_BLUE, marginBottom: 4 },
   planSubtitle: { fontSize: 13, color: '#4F4F4F', marginBottom: 16 },

@@ -35,7 +35,15 @@ export default function RegisterScreen() {
     }
     try {
       setLoading(true)
-      const { error } = await supabase.auth.signUp({ email, password })
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            requires_profile_setup: true,
+          },
+        },
+      })
       if (error) {
         showAlert(t('auth.registerFailed'), error.message)
         return

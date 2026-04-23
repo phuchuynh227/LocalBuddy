@@ -4,16 +4,20 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   Platform,
   RefreshControl,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { UserAvatar } from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { getProfileDisplayName, normalizeUserProfile, UserProfile } from '../lib/user-profile';
 import { supabase } from '../lib/supabase';
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -31,6 +35,7 @@ type Request = {
   status: string;
   message: string;
   created_at: string;
+  requester_profile?: UserProfile | null;
 };
 
 type Plan = {
@@ -74,13 +79,13 @@ export default function MyPlansScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
 
   const labels = useMemo(() => ({
-    buddyPrefix: language === 'vn' ? 'Buddy' : 'Buddy',
-    locationPrefix: language === 'vn' ? 'Dia diem:' : 'Location:',
-    timePrefix: language === 'vn' ? 'Thoi gian:' : 'Time:',
-    requestActionPrefix: language === 'vn' ? 'Tham gia:' : 'Join:',
-  }), [language]);
+    buddyPrefix: t('myPlans.requesterFallback'),
+    locationPrefix: t('myPlans.locationPrefix'),
+    timePrefix: t('myPlans.timePrefix'),
+  }), [t]);
 
   const fetchPlans = useCallback(async () => {
     if (!user?.id) {
@@ -101,7 +106,41 @@ export default function MyPlansScreen() {
       .eq('host_id', user.id)
       .order('scheduled_at', { ascending: true });
 
-    if (!error && data) setPlans(data as Plan[]);
+    if (!error && data) {
+      const rawPlans = data as Plan[];
+      const requesterIds = Array.from(
+        new Set(
+          rawPlans.flatMap((plan) => plan.plan_requests.map((request) => request.requester_id)).filter(Boolean),
+        ),
+      );
+
+      let profileMap = new Map<string, UserProfile>();
+
+      if (requesterIds.length > 0) {
+        const { data: profileRows } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .in('user_id', requesterIds);
+
+        profileMap = new Map(
+          (profileRows ?? [])
+            .map((row: any) => normalizeUserProfile(row))
+            .filter((row): row is UserProfile => Boolean(row))
+            .map((row) => [row.user_id, row]),
+        );
+      }
+
+      setPlans(
+        rawPlans.map((plan) => ({
+          ...plan,
+          plan_requests: plan.plan_requests.map((request) => ({
+            ...request,
+            requester_profile: profileMap.get(request.requester_id) ?? null,
+          })),
+        })),
+      );
+    }
+
     setLoading(false);
     setRefreshing(false);
   }, [user?.id]);
@@ -196,22 +235,53 @@ export default function MyPlansScreen() {
     return { bg: '#F3F4F6', color: '#374151', label: status };
   };
 
+  const renderVisibleFields = (request: Request) => {
+    const visibility = request.requester_profile?.visibility_settings;
+    const profile = request.requester_profile;
+    const rows: string[] = [];
+
+    if (visibility?.fullName && profile?.full_name) {
+      rows.push(`${t('personalInfo.fullName')}: ${profile.full_name}`);
+    }
+    if (visibility?.nickname && profile?.nickname) {
+      rows.push(`${t('personalInfo.nickname')}: ${profile.nickname}`);
+    }
+    if (visibility?.gender && profile?.gender) {
+      rows.push(`${t('personalInfo.gender')}: ${t(`personalInfo.genderOptions.${profile.gender}`)}`);
+    }
+    if (visibility?.birthYear && profile?.birth_year) {
+      rows.push(`${t('personalInfo.birthYear')}: ${profile.birth_year}`);
+    }
+    if (visibility?.interests && profile?.interests) {
+      rows.push(`${t('personalInfo.interests')}: ${profile.interests}`);
+    }
+
+    if (rows.length === 0) {
+      return <Text style={styles.previewEmpty}>{t('myPlans.profilePreviewEmpty')}</Text>;
+    }
+
+    return rows.map((row) => (
+      <Text key={row} style={styles.previewField}>
+        {row}
+      </Text>
+    ));
+  };
+
   const renderRequest = (request: Request, plan: Plan) => {
     const isPending = request.status === 'pending';
     const isAccepted = request.status === 'accepted';
     const isDeclined = request.status === 'declined';
+    const displayName = getProfileDisplayName(request.requester_profile, `${labels.buddyPrefix} #${request.requester_id.slice(0, 8)}`);
 
     return (
       <View key={request.id} style={styles.requestCard}>
-        <View style={styles.requestHeader}>
+        <TouchableOpacity style={styles.requestHeader} activeOpacity={0.9} onPress={() => setSelectedRequest(request)}>
           <View style={styles.requesterAvatar}>
-            <Text style={styles.requesterAvatarText}>
-              {request.requester_id.charAt(0).toUpperCase()}
-            </Text>
+            <UserAvatar profile={request.requester_profile} fallbackText={request.requester_id} size={36} textSize={16} />
           </View>
           <View style={styles.requestInfo}>
             <Text style={styles.requesterId} numberOfLines={1}>
-              {labels.buddyPrefix} #{request.requester_id.slice(0, 8)}
+              {displayName}
             </Text>
             <Text style={styles.requestTime}>
               {new Date(request.created_at).toLocaleDateString(language === 'vn' ? 'vi-VN' : 'en-US')}
@@ -227,7 +297,7 @@ export default function MyPlansScreen() {
               <Text style={[styles.statusChipText, { color: '#991B1B' }]}>{t('myPlans.declined')}</Text>
             </View>
           )}
-        </View>
+        </TouchableOpacity>
 
         {!!request.message && (
           <Text style={styles.requestMessage}>{request.message}</Text>
@@ -366,6 +436,28 @@ export default function MyPlansScreen() {
           />
         )}
       </View>
+
+      <Modal visible={Boolean(selectedRequest)} transparent animationType="fade" onRequestClose={() => setSelectedRequest(null)}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setSelectedRequest(null)} />
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <UserAvatar profile={selectedRequest?.requester_profile} fallbackText={selectedRequest?.requester_id} size={64} textSize={24} />
+              <Text style={styles.modalTitle}>
+                {getProfileDisplayName(selectedRequest?.requester_profile, t('myPlans.profilePreviewTitle'))}
+              </Text>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {selectedRequest ? renderVisibleFields(selectedRequest) : null}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setSelectedRequest(null)}>
+              <Text style={styles.modalCloseText}>{t('common.ok')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -399,8 +491,7 @@ const styles = StyleSheet.create({
   requestsSectionTitle: { fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 8 },
   requestCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E5E7EB' },
   requestHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  requesterAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: LIGHT_BLUE, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
-  requesterAvatarText: { fontSize: 16, fontWeight: '700', color: PRIMARY_BLUE },
+  requesterAvatar: { marginRight: 10 },
   requestInfo: { flex: 1 },
   requesterId: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
   requestTime: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
@@ -422,4 +513,47 @@ const styles = StyleSheet.create({
   emptySubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 24 },
   createButton: { backgroundColor: PRIMARY_BLUE, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },
   createButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(17, 24, 39, 0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    marginTop: 12,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  previewField: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 10,
+    lineHeight: 20,
+  },
+  previewEmpty: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  modalCloseButton: {
+    marginTop: 18,
+    backgroundColor: PRIMARY_BLUE,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalCloseText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 });

@@ -9,13 +9,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { ProfileCompletionBanner } from '../../components/ProfileCompletionBanner';
+import { UserAvatar } from '../../components/UserAvatar';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { getProfileDisplayName } from '../../lib/user-profile';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, profile, profileCompleted, signOut } = useAuth();
   const { language, t } = useLanguage();
   const { unreadCount } = useNotifications();
   const joinDate = new Date(user?.created_at ?? '');
@@ -43,11 +46,8 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user?.email?.charAt(0).toUpperCase() ?? 'LB'}
-            </Text>
-          </View>
+          <UserAvatar profile={profile} fallbackText={user?.email ?? 'LB'} size={84} textSize={32} />
+          <Text style={styles.name}>{getProfileDisplayName(profile, user?.email)}</Text>
           <Text style={styles.email}>{user?.email}</Text>
           {!!joinDateText && (
             <Text style={styles.joinDate}>
@@ -87,6 +87,11 @@ export default function ProfileScreen() {
             )}
             <Text style={styles.menuArrow}>{'>'}</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/personal-info' as any)}>
+            <Entypo name="v-card" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
+            <Text style={styles.menuLabel}>{t('profile.personalInfo')}</Text>
+            <Text style={styles.menuArrow}>{'>'}</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/change-password' as any)}>
             <Entypo name="lock" size={20} color={PRIMARY_BLUE} style={styles.menuIcon} />
             <Text style={styles.menuLabel}>{t('profile.changePassword')}</Text>
@@ -98,6 +103,10 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>{t('profile.logout')}</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {!profileCompleted && (
+        <ProfileCompletionBanner onPress={() => router.push('/personal-info' as any)} />
+      )}
     </SafeAreaView>
   );
 }
@@ -107,7 +116,7 @@ const LIGHT_BLUE = '#E3F2FD';
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: 88 },
   topBar: {
     paddingHorizontal: 20,
     paddingTop: 12,
@@ -139,17 +148,8 @@ const styles = StyleSheet.create({
   },
   topBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFFFFF' },
   avatarSection: { alignItems: 'center', paddingVertical: 32, backgroundColor: LIGHT_BLUE },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: PRIMARY_BLUE,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  avatarText: { fontSize: 32, fontWeight: '700', color: '#FFFFFF' },
-  email: { fontSize: 16, fontWeight: '600', color: '#1A1A1A', marginBottom: 4 },
+  name: { fontSize: 20, fontWeight: '700', color: '#111827', marginTop: 14, marginBottom: 4 },
+  email: { fontSize: 15, fontWeight: '600', color: '#1A1A1A', marginBottom: 4 },
   joinDate: { fontSize: 13, color: '#6B7280' },
   section: { marginTop: 24, paddingHorizontal: 20 },
   sectionTitle: {

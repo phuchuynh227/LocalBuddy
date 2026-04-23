@@ -4,12 +4,13 @@ import { useAuth } from '../../context/AuthContext'
 import { useLanguage } from '../../context/LanguageContext'
 
 export default function TabLayout() {
-  const { session, loading } = useAuth()
+  const { session, loading, profileLoading, requiresProfileSetup } = useAuth()
   const { t } = useLanguage()
 
-  if (loading) return null
+  if (loading || profileLoading) return null
 
-  if (!session) return <Redirect href="/(auth)/login" />
+  if (!session) return <Redirect href={"/(auth)/login" as any} />
+  if (requiresProfileSetup) return <Redirect href={"/personal-info" as any} />
 
   return (
     <Tabs
