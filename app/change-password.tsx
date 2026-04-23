@@ -1,18 +1,19 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { AppBottomNav } from '../components/AppBottomNav';
 import { useLanguage } from '../context/LanguageContext';
+import { supabase } from '../lib/supabase';
 
 export default function ChangePasswordScreen() {
   const router = useRouter();
@@ -34,13 +35,14 @@ export default function ChangePasswordScreen() {
       Alert.alert(t('writeReview.errorTitle'), t('auth.passwordTooShort'));
       return;
     }
+
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) {
       Alert.alert(t('writeReview.errorTitle'), error.message);
     } else {
       Alert.alert(t('writeReview.successTitle'), t('changePassword.successSubtitle'), [
-        { text: t('common.ok'), onPress: () => router.back() }
+        { text: t('common.ok'), onPress: () => router.back() },
       ]);
     }
     setLoading(false);
@@ -51,7 +53,7 @@ export default function ChangePasswordScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.inner}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backText}>←</Text>
+            <Text style={styles.backText}>{'<'}</Text>
           </TouchableOpacity>
 
           <Text style={styles.title}>{t('changePassword.title')}</Text>
@@ -79,6 +81,7 @@ export default function ChangePasswordScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      <AppBottomNav />
     </SafeAreaView>
   );
 }
@@ -87,12 +90,30 @@ const PRIMARY_BLUE = '#1E88E5';
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff' },
-  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
-  backButton: { position: 'absolute', top: 20, left: 28, width: 36, height: 36, backgroundColor: '#F5F7FB', borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, paddingBottom: 96 },
+  backButton: {
+    position: 'absolute',
+    top: 20,
+    left: 28,
+    width: 36,
+    height: 36,
+    backgroundColor: '#F5F7FB',
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   backText: { fontSize: 18, color: PRIMARY_BLUE, fontWeight: '700' },
   title: { fontSize: 28, fontWeight: '700', color: '#1A1A1A', marginBottom: 12 },
   subtitle: { fontSize: 14, color: '#6B7280', marginBottom: 32, lineHeight: 22 },
-  input: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 16, fontSize: 16, marginBottom: 16, backgroundColor: '#F9FAFB' },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    marginBottom: 16,
+    backgroundColor: '#F9FAFB',
+  },
   button: { backgroundColor: PRIMARY_BLUE, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

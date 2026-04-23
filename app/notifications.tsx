@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { AppBottomNav } from '../components/AppBottomNav';
 import { useLanguage } from '../context/LanguageContext';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -107,6 +108,7 @@ export default function NotificationsScreen() {
           }
         />
       )}
+      <AppBottomNav />
     </SafeAreaView>
   );
 }
@@ -134,8 +136,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '700', color: '#1A1A1A' },
   subtitle: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
   markRead: { fontSize: 12, fontWeight: '700', color: '#1E88E5' },
-  list: { padding: 20, paddingBottom: 32 },
-  emptyContainer: { flexGrow: 1, padding: 20 },
+  list: { padding: 20, paddingBottom: 104 },
+  emptyContainer: { flexGrow: 1, padding: 20, paddingBottom: 104 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
   emptyIcon: { marginBottom: 12 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: '#1A1A1A', marginBottom: 8 },

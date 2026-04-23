@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AppBottomNav } from '../components/AppBottomNav';
 import { UserAvatar } from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -36,6 +37,7 @@ export default function ChatScreen() {
   const { matchUserId, planTitle } = useLocalSearchParams<{
     matchUserId: string;
     planTitle: string;
+    matchId?: string;
   }>();
 
   const [matchId, setMatchId] = useState<string | null>(null);
@@ -55,7 +57,7 @@ export default function ChatScreen() {
       .eq('match_id', currentMatchId)
       .order('created_at', { ascending: true });
 
-    if (data) setMessages(data);
+    return data ?? [];
   };
 
   useEffect(() => {
@@ -63,57 +65,64 @@ export default function ChatScreen() {
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
     const findMatch = async () => {
-      const { data } = await supabase
-        .from('matches')
-        .select('id')
-        .or(
-          `and(user1_id.eq.${user?.id},user2_id.eq.${matchUserId}),and(user1_id.eq.${matchUserId},user2_id.eq.${user?.id})`
-        )
-        .limit(1)
-        .single();
+      let resolvedMatchId = matchId ?? null;
+
+      if (!resolvedMatchId) {
+        const { data } = await supabase
+          .from('matches')
+          .select('id')
+          .or(
+            `and(user1_id.eq.${user?.id},user2_id.eq.${matchUserId}),and(user1_id.eq.${matchUserId},user2_id.eq.${user?.id})`
+          )
+          .limit(1)
+          .single();
+
+        resolvedMatchId = data?.id ?? null;
+      }
 
       if (!active) return;
 
-      if (!data) {
+      if (!resolvedMatchId) {
         setLoading(false);
         return;
       }
 
-      setMatchId(data.id);
-      await fetchMessages(data.id);
-      await markChatRead(data.id);
-
-      const { data: profileData } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('user_id', matchUserId)
-        .maybeSingle();
+      setMatchId(resolvedMatchId);
+      const [messageRows, profileRes] = await Promise.all([
+        fetchMessages(resolvedMatchId),
+        supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('user_id', matchUserId)
+          .maybeSingle(),
+      ]);
 
       if (!active) return;
-      setBuddyProfile(normalizeUserProfile(profileData));
+      setMessages(messageRows);
+      setBuddyProfile(normalizeUserProfile(profileRes.data));
+      setLoading(false);
+      markChatRead(resolvedMatchId).catch(() => {});
 
       channel = supabase
-        .channel(`chat-${data.id}`)
+        .channel(`chat-${resolvedMatchId}`)
         .on(
           'postgres_changes',
           {
             event: 'INSERT',
             schema: 'public',
             table: 'messages',
-            filter: `match_id=eq.${data.id}`,
+            filter: `match_id=eq.${resolvedMatchId}`,
           },
           (payload) => {
             setMessages((prev) => {
               if (prev.find((message) => message.id === payload.new.id)) return prev;
               return [...prev, payload.new as Message];
             });
-            markChatRead(data.id);
+            markChatRead(resolvedMatchId).catch(() => {});
             setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
           }
         )
         .subscribe();
-
-      setLoading(false);
     };
 
     findMatch();
@@ -122,7 +131,7 @@ export default function ChatScreen() {
       active = false;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [markChatRead, matchUserId, user?.id]);
+  }, [markChatRead, matchId, matchUserId, user?.id]);
 
   const handleSend = async () => {
     if (!text.trim() || !matchId) return;
@@ -313,6 +322,7 @@ export default function ChatScreen() {
           </View>
         </View>
       )}
+      <AppBottomNav />
     </SafeAreaView>
   );
 }
@@ -331,7 +341,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyEmoji: { fontSize: 40, marginBottom: 12 },
   emptyText: { fontSize: 15, color: '#9CA3AF' },
-  messagesList: { padding: 16, paddingBottom: 8 },
+  messagesList: { padding: 16, paddingBottom: 96 },
   timeLabel: { textAlign: 'center', fontSize: 11, color: '#9CA3AF', marginVertical: 8 },
   messageRow: { flexDirection: 'row', marginBottom: 4, justifyContent: 'flex-start' },
   messageRowMe: { justifyContent: 'flex-end' },

@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AppBottomNav } from '../components/AppBottomNav';
 import { useAuth } from '../context/AuthContext';
 import { UserAvatar } from '../components/UserAvatar';
 import { useLanguage } from '../context/LanguageContext';
@@ -787,6 +788,7 @@ export default function CreatePlanScreen() {
           </View>
         </View>
       )}
+      <AppBottomNav />
     </SafeAreaView>
   );
 }

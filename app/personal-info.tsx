@@ -17,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AppBottomNav } from '../components/AppBottomNav';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import {
@@ -435,6 +436,7 @@ export default function PersonalInfoScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+      <AppBottomNav />
     </SafeAreaView>
   );
 }
@@ -442,7 +444,7 @@ export default function PersonalInfoScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
   flex: { flex: 1 },
-  content: { padding: 20, paddingBottom: 36 },
+  content: { padding: 20, paddingBottom: 104 },
   header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20 },
   backButton: {
     width: 40,

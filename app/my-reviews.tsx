@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppBottomNav } from '../components/AppBottomNav';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
@@ -111,6 +112,7 @@ export default function MyReviewsScreen() {
           }
         />
       )}
+      <AppBottomNav />
     </SafeAreaView>
   );
 }
@@ -141,8 +143,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', color: '#1A1A1A', flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   loadingText: { marginTop: 10, fontSize: 13, color: '#9CA3AF' },
-  listContent: { padding: 20, paddingBottom: 40 },
-  emptyContainer: { flexGrow: 1, padding: 20 },
+  listContent: { padding: 20, paddingBottom: 104 },
+  emptyContainer: { flexGrow: 1, padding: 20, paddingBottom: 104 },
   emptyEmoji: { fontSize: 44, marginBottom: 10 },
   emptyText: { fontSize: 15, color: '#9CA3AF', textAlign: 'center' },
   card: {
@@ -160,4 +162,3 @@ const styles = StyleSheet.create({
   dateText: { fontSize: 12, color: '#9CA3AF', marginBottom: 8 },
   comment: { fontSize: 13, color: '#4B5563', lineHeight: 18 },
 });
-

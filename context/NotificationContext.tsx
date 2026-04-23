@@ -206,7 +206,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               title: labels.messageTitle,
               body: labels.messageBody(planTitle, message.content),
               createdAt: message.created_at,
-              actionHref: `/chat?matchUserId=${match ? (match.user1_id === user.id ? match.user2_id : match.user1_id) : ''}&planTitle=${encodeURIComponent(planTitle)}`,
+              actionHref: `/chat?matchId=${matchId}&matchUserId=${match ? (match.user1_id === user.id ? match.user2_id : match.user1_id) : ''}&planTitle=${encodeURIComponent(planTitle)}`,
               read: !isUnread || seenIds.includes(id),
             });
           });

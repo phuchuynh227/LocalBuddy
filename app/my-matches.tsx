@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AppBottomNav } from '../components/AppBottomNav';
 import { UserAvatar } from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -268,7 +269,7 @@ export default function MyMatchesScreen() {
                       <TouchableOpacity
                         style={styles.chatButton}
                         onPress={() => router.push(
-                          `/chat?matchUserId=${buddyId}&planTitle=${encodeURIComponent(plan?.title ?? labels.planFallback)}` as any
+                          `/chat?matchId=${item.id}&matchUserId=${buddyId}&planTitle=${encodeURIComponent(plan?.title ?? labels.planFallback)}` as any
                         )}
                       >
                         <Text style={styles.chatButtonText}>{labels.chatWithBuddy}</Text>
@@ -312,6 +313,7 @@ export default function MyMatchesScreen() {
           </View>
         </View>
       )}
+      <AppBottomNav />
     </SafeAreaView>
   );
 }
@@ -325,7 +327,7 @@ const styles = StyleSheet.create({
   backButton: { width: 36, height: 36, backgroundColor: '#F5F7FB', borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   backText: { fontSize: 18, color: PRIMARY_BLUE, fontWeight: '700' },
   title: { fontSize: 20, fontWeight: '700', color: '#1A1A1A' },
-  list: { paddingBottom: 32 },
+  list: { paddingBottom: 104 },
   section: { marginBottom: 24 },
   sectionLabel: { fontSize: 15, fontWeight: '700', color: '#1A1A1A', marginBottom: 12 },
   pendingCard: { backgroundColor: '#FFFBEB', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#FDE68A' },
