@@ -217,6 +217,8 @@ const translations = {
       reasonTimeNear: 'Similar time',
       requestPending: 'Waiting for host',
       requestPendingTitle: 'Request already sent',
+      hostInfo: 'Host info',
+      hostFallback: 'Host',
     },
     writeReview: {
       title: 'Write a review',
@@ -473,6 +475,8 @@ const translations = {
       reasonTimeNear: 'Gần giờ',
       requestPending: 'Đang chờ duyệt',
       requestPendingTitle: 'Đã gửi yêu cầu',
+      hostInfo: 'Thông tin host',
+      hostFallback: 'Host',
     },
     writeReview: {
       title: 'Viết đánh giá',

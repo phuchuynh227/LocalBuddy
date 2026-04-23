@@ -1,4 +1,5 @@
 import { Entypo } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -16,7 +17,9 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { UserAvatar } from '../components/UserAvatar';
 import { useLanguage } from '../context/LanguageContext';
+import { getProfileDisplayName, normalizeUserProfile, UserProfile } from '../lib/user-profile';
 import { supabase } from '../lib/supabase';
 
 const CATEGORIES = [
@@ -55,6 +58,7 @@ type Plan = {
   status: string;
   matchReasons: string[];
   joined_count?: number;
+  host_profile?: UserProfile | null;
 };
 
 function toIsoDate(date: Date) {
@@ -111,6 +115,8 @@ export default function CreatePlanScreen() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [requesting, setRequesting] = useState<string | null>(null);
   const [pendingRequestPlanIds, setPendingRequestPlanIds] = useState<string[]>([]);
+  const [selectedHostProfile, setSelectedHostProfile] = useState<UserProfile | null>(null);
+  const [zoomedAvatarUrl, setZoomedAvatarUrl] = useState<string | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [title, setTitle] = useState('');
@@ -238,7 +244,30 @@ export default function CreatePlanScreen() {
           return { ...plan, matchReasons: reasons, joined_count: joinedCount };
         })
         .filter(Boolean) as Plan[];
-      setSuggestions(matched);
+
+      const hostIds = Array.from(new Set(matched.map((plan) => plan.host_id).filter(Boolean)));
+      let hostProfileMap = new Map<string, UserProfile>();
+
+      if (hostIds.length > 0) {
+        const { data: hostProfiles } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .in('user_id', hostIds);
+
+        hostProfileMap = new Map(
+          (hostProfiles ?? [])
+            .map((row: any) => normalizeUserProfile(row))
+            .filter((row): row is UserProfile => Boolean(row))
+            .map((row) => [row.user_id, row]),
+        );
+      }
+
+      setSuggestions(
+        matched.map((plan) => ({
+          ...plan,
+          host_profile: hostProfileMap.get(plan.host_id) ?? null,
+        })),
+      );
     }
 
     setLoadingSuggest(false);
@@ -371,6 +400,27 @@ export default function CreatePlanScreen() {
   const formatTime = (iso: string) => {
     const d = new Date(iso);
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} - ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+  };
+
+  const renderVisibleFields = (profile: UserProfile | null) => {
+    const visibility = profile?.visibility_settings;
+    const rows: string[] = [];
+
+    if (visibility?.fullName && profile?.full_name) rows.push(`${t('personalInfo.fullName')}: ${profile.full_name}`);
+    if (visibility?.nickname && profile?.nickname) rows.push(`${t('personalInfo.nickname')}: ${profile.nickname}`);
+    if (visibility?.gender && profile?.gender) rows.push(`${t('personalInfo.gender')}: ${t(`personalInfo.genderOptions.${profile.gender}`)}`);
+    if (visibility?.birthYear && profile?.birth_year) rows.push(`${t('personalInfo.birthYear')}: ${profile.birth_year}`);
+    if (visibility?.interests && profile?.interests) rows.push(`${t('personalInfo.interests')}: ${profile.interests}`);
+
+    if (rows.length === 0) {
+      return <Text style={styles.previewEmpty}>{t('myPlans.profilePreviewEmpty')}</Text>;
+    }
+
+    return rows.map((row) => (
+      <Text key={row} style={styles.previewField}>
+        {row}
+      </Text>
+    ));
   };
 
   return (
@@ -524,6 +574,25 @@ export default function CreatePlanScreen() {
                         </Text>
                       </View>
                     </View>
+                    <TouchableOpacity
+                      style={styles.hostRow}
+                      activeOpacity={0.9}
+                      onPress={() => setSelectedHostProfile(item.host_profile ?? null)}
+                    >
+                      <TouchableOpacity
+                        activeOpacity={0.9}
+                        onPress={() => item.host_profile?.avatar_url && setZoomedAvatarUrl(item.host_profile.avatar_url)}
+                      >
+                        <UserAvatar profile={item.host_profile} fallbackText={item.host_id} size={38} textSize={16} />
+                      </TouchableOpacity>
+                      <View style={styles.hostInfo}>
+                        <Text style={styles.hostLabel}>{t('createPlan.hostInfo')}</Text>
+                        <Text style={styles.hostName} numberOfLines={1}>
+                          {getProfileDisplayName(item.host_profile, `${t('createPlan.hostFallback')} #${item.host_id.slice(0, 8)}`)}
+                        </Text>
+                      </View>
+                      <Text style={styles.hostChevron}>{'>'}</Text>
+                    </TouchableOpacity>
                     <Text style={styles.planTime}>{formatTime(item.scheduled_at)}</Text>
                     <View style={styles.reasonsRow}>
                       {item.matchReasons.map((reason, index) => (
@@ -685,6 +754,39 @@ export default function CreatePlanScreen() {
           }}
         />
       ) : null}
+
+      {selectedHostProfile && (
+        <View style={styles.overlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setSelectedHostProfile(null)} />
+          <View style={styles.previewCard}>
+            <TouchableOpacity
+              activeOpacity={0.92}
+              onPress={() => selectedHostProfile.avatar_url && setZoomedAvatarUrl(selectedHostProfile.avatar_url)}
+              style={styles.previewAvatarWrap}
+            >
+              <UserAvatar profile={selectedHostProfile} fallbackText={selectedHostProfile.user_id} size={72} textSize={26} />
+            </TouchableOpacity>
+            <Text style={styles.previewTitle}>
+              {getProfileDisplayName(selectedHostProfile, t('createPlan.hostInfo'))}
+            </Text>
+            <ScrollView style={styles.previewScroll} showsVerticalScrollIndicator={false}>
+              {renderVisibleFields(selectedHostProfile)}
+            </ScrollView>
+            <TouchableOpacity style={styles.previewCloseButton} onPress={() => setSelectedHostProfile(null)}>
+              <Text style={styles.previewCloseText}>{t('common.ok')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {zoomedAvatarUrl && (
+        <View style={styles.overlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setZoomedAvatarUrl(null)} />
+          <View style={styles.zoomCard}>
+            <Image source={{ uri: zoomedAvatarUrl }} style={styles.zoomImage} contentFit="contain" />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -863,6 +965,20 @@ const styles = StyleSheet.create({
   reasonChip: { backgroundColor: LIGHT_BLUE, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   reasonText: { fontSize: 12, color: PRIMARY_BLUE, fontWeight: '600' },
   planDescription: { fontSize: 13, color: '#4B5563', lineHeight: 18, marginBottom: 10 },
+  hostRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 10,
+    marginBottom: 10,
+  },
+  hostInfo: { flex: 1, marginLeft: 10, marginRight: 10 },
+  hostLabel: { fontSize: 11, fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.4 },
+  hostName: { fontSize: 14, fontWeight: '700', color: '#1A1A1A', marginTop: 2 },
+  hostChevron: { fontSize: 16, fontWeight: '700', color: '#9CA3AF' },
   joinButton: { backgroundColor: PRIMARY_BLUE, borderRadius: 12, padding: 12, alignItems: 'center' },
   joinButtonDisabled: { backgroundColor: '#E5E7EB' },
   joinButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
@@ -904,4 +1020,59 @@ const styles = StyleSheet.create({
   buddyCount: { fontSize: 20, fontWeight: '700', color: '#1A1A1A', marginHorizontal: 20 },
   submitButton: { backgroundColor: PRIMARY_BLUE, borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 24 },
   submitButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(17, 24, 39, 0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  previewCard: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 390,
+    maxHeight: '72%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 20,
+    overflow: 'hidden',
+  },
+  previewAvatarWrap: { alignSelf: 'center' },
+  previewTitle: {
+    marginTop: 12,
+    marginBottom: 14,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  previewScroll: { maxHeight: 220 },
+  previewField: { fontSize: 14, color: '#374151', marginBottom: 10, lineHeight: 20 },
+  previewEmpty: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 20 },
+  previewCloseButton: {
+    marginTop: 18,
+    backgroundColor: PRIMARY_BLUE,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  previewCloseText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  zoomCard: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 390,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 16,
+    overflow: 'hidden',
+  },
+  zoomImage: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+  },
 });

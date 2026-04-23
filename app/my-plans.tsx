@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -79,6 +80,7 @@ export default function MyPlansScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
+  const [zoomedAvatarUrl, setZoomedAvatarUrl] = useState<string | null>(null);
 
   const labels = useMemo(() => ({
     buddyPrefix: t('myPlans.requesterFallback'),
@@ -441,7 +443,12 @@ export default function MyPlansScreen() {
           <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setSelectedRequest(null)} />
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <UserAvatar profile={selectedRequest?.requester_profile} fallbackText={selectedRequest?.requester_id} size={64} textSize={24} />
+              <TouchableOpacity
+                activeOpacity={0.92}
+                onPress={() => selectedRequest?.requester_profile?.avatar_url && setZoomedAvatarUrl(selectedRequest.requester_profile.avatar_url)}
+              >
+                <UserAvatar profile={selectedRequest?.requester_profile} fallbackText={selectedRequest?.requester_id} size={64} textSize={24} />
+              </TouchableOpacity>
               <Text style={styles.modalTitle}>
                 {getProfileDisplayName(selectedRequest?.requester_profile, t('myPlans.profilePreviewTitle'))}
               </Text>
@@ -454,6 +461,15 @@ export default function MyPlansScreen() {
             <TouchableOpacity style={styles.modalCloseButton} onPress={() => setSelectedRequest(null)}>
               <Text style={styles.modalCloseText}>{t('common.ok')}</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {zoomedAvatarUrl && (
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setZoomedAvatarUrl(null)} />
+          <View style={styles.zoomCard}>
+            <Image source={{ uri: zoomedAvatarUrl }} style={styles.zoomImage} contentFit="contain" />
           </View>
         </View>
       )}
@@ -563,4 +579,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalCloseText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  zoomCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 16,
+    width: '100%',
+    maxWidth: 390,
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  zoomImage: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+  },
 });
