@@ -31,15 +31,33 @@ const PRIMARY_BLUE = '#1E88E5';
 const LIGHT_BLUE = '#E3F2FD';
 const GENDER_OPTIONS: ProfileGender[] = ['male', 'female', 'other'];
 
+function getFriendlyProfileErrorMessage(error: any, fallbackMessage: string, backendSetupMessage: string) {
+  const rawMessage = String(error?.message ?? '').toLowerCase();
+
+  if (
+    rawMessage.includes('user_profiles') ||
+    rawMessage.includes('relation') ||
+    rawMessage.includes('bucket not found') ||
+    rawMessage.includes('avatars') ||
+    rawMessage.includes('row-level security') ||
+    rawMessage.includes('permission denied')
+  ) {
+    return backendSetupMessage;
+  }
+
+  return error?.message ?? fallbackMessage;
+}
+
 async function uploadAvatarAsync(userId: string, uri: string, mimeType?: string | null) {
   const response = await fetch(uri);
-  const blob = await response.blob();
-  const extension = mimeType?.split('/')[1] || uri.split('.').pop() || 'jpg';
+  const arrayBuffer = await response.arrayBuffer();
+  const contentType = mimeType ?? response.headers.get('content-type') ?? 'image/jpeg';
+  const extension = contentType.split('/')[1] || uri.split('.').pop() || 'jpg';
   const path = `${userId}/${Date.now()}.${extension}`;
 
-  const { error } = await supabase.storage.from('avatars').upload(path, blob, {
+  const { error } = await supabase.storage.from('avatars').upload(path, arrayBuffer, {
     cacheControl: '3600',
-    contentType: mimeType ?? blob.type ?? 'image/jpeg',
+    contentType,
     upsert: true,
   });
 
@@ -114,7 +132,14 @@ export default function PersonalInfoScreen() {
       const publicUrl = await uploadAvatarAsync(user.id, asset.uri, asset.mimeType);
       setAvatarUrl(publicUrl);
     } catch (error: any) {
-      showMessage(t('writeReview.errorTitle'), error?.message ?? t('personalInfo.avatarUploadFailed'));
+      showMessage(
+        t('writeReview.errorTitle'),
+        getFriendlyProfileErrorMessage(
+          error,
+          t('personalInfo.avatarUploadFailed'),
+          t('personalInfo.backendSetupRequired'),
+        ),
+      );
     } finally {
       setPickingImage(false);
     }
@@ -153,7 +178,14 @@ export default function PersonalInfoScreen() {
       await refreshProfile();
       router.replace('/(tabs)/' as any);
     } catch (error: any) {
-      showMessage(t('writeReview.errorTitle'), error?.message ?? t('personalInfo.saveFailed'));
+      showMessage(
+        t('writeReview.errorTitle'),
+        getFriendlyProfileErrorMessage(
+          error,
+          t('personalInfo.saveFailed'),
+          t('personalInfo.backendSetupRequired'),
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -201,7 +233,14 @@ export default function PersonalInfoScreen() {
       await refreshProfile();
       router.replace('/(tabs)/profile' as any);
     } catch (error: any) {
-      showMessage(t('writeReview.errorTitle'), error?.message ?? t('personalInfo.saveFailed'));
+      showMessage(
+        t('writeReview.errorTitle'),
+        getFriendlyProfileErrorMessage(
+          error,
+          t('personalInfo.saveFailed'),
+          t('personalInfo.backendSetupRequired'),
+        ),
+      );
     } finally {
       setLoading(false);
     }

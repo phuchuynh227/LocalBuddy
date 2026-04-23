@@ -160,6 +160,7 @@ const translations = {
       invalidBirthYear: 'Please enter a valid birth year.',
       saveFailed: 'Could not save your profile. Please try again.',
       avatarUploadFailed: 'Could not upload your avatar. Please try again.',
+      backendSetupRequired: 'Profile backend is not set up yet. Run the SQL in scripts/user_profiles.sql on Supabase first.',
       permissionDenied: 'Photo access is needed to choose an avatar.',
       genderOptions: {
         male: 'Male',
@@ -412,6 +413,7 @@ const translations = {
       invalidBirthYear: 'Vui lòng nhập năm sinh hợp lệ.',
       saveFailed: 'Không thể lưu profile, vui lòng thử lại.',
       avatarUploadFailed: 'Không thể tải avatar, vui lòng thử lại.',
+      backendSetupRequired: 'Backend profile chưa được setup. Hãy chạy file scripts/user_profiles.sql trên Supabase trước.',
       permissionDenied: 'Cần quyền truy cập ảnh để chọn avatar.',
       genderOptions: {
         male: 'Nam',
