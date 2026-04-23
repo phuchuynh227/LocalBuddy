@@ -110,6 +110,7 @@ export default function CreatePlanScreen() {
   const [loadingSuggest, setLoadingSuggest] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [requesting, setRequesting] = useState<string | null>(null);
+  const [pendingRequestPlanIds, setPendingRequestPlanIds] = useState<string[]>([]);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [title, setTitle] = useState('');
@@ -165,6 +166,22 @@ export default function CreatePlanScreen() {
       if (placeSearchTimer.current) clearTimeout(placeSearchTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    const fetchMyPendingRequests = async () => {
+      if (!user?.id) return;
+
+      const { data } = await supabase
+        .from('plan_requests')
+        .select('plan_id')
+        .eq('requester_id', user.id)
+        .in('status', ['pending', 'accepted']);
+
+      setPendingRequestPlanIds((data ?? []).map((item: any) => item.plan_id));
+    };
+
+    fetchMyPendingRequests();
+  }, [user?.id]);
 
   const setPickedDate = useCallback((iso: string) => {
     setSelectedDateIso(iso);
@@ -233,6 +250,10 @@ export default function CreatePlanScreen() {
       Alert.alert(t('createPlan.full'), t('createPlan.fullAlert'));
       return;
     }
+    if (pendingRequestPlanIds.includes(plan.id)) {
+      Alert.alert(t('createPlan.requestPendingTitle'), t('createPlan.requestPending'));
+      return;
+    }
 
     setRequesting(plan.id);
     const { error } = await supabase.from('plan_requests').insert({
@@ -246,10 +267,15 @@ export default function CreatePlanScreen() {
         error.code === '23505' ? t('createPlan.requestSent') : t('writeReview.errorTitle'),
         error.code === '23505' ? t('createPlan.alreadyRequested') : t('createPlan.errorRequest'),
       );
+      if (error.code === '23505') {
+        setPendingRequestPlanIds((current) => (current.includes(plan.id) ? current : [...current, plan.id]));
+      }
     } else {
-      Alert.alert(t('createPlan.requestSent'), t('createPlan.waitForHost'), [
-        { text: t('common.ok'), onPress: () => router.replace('/(tabs)/' as any) },
-      ]);
+      setPendingRequestPlanIds((current) => (current.includes(plan.id) ? current : [...current, plan.id]));
+      setSuggestions((current) =>
+        current.map((item) => (item.id === plan.id ? { ...item } : item)),
+      );
+      Alert.alert(t('createPlan.requestSent'), t('createPlan.waitForHost'));
     }
 
     setRequesting(null);
@@ -483,6 +509,7 @@ export default function CreatePlanScreen() {
               suggestions.map((item) => {
                 const remaining = item.max_buddies - (item.joined_count ?? 0);
                 const isFull = remaining <= 0;
+                const hasPendingRequest = pendingRequestPlanIds.includes(item.id);
                 return (
                   <View key={item.id} style={styles.planCard}>
                     <View style={styles.planHeader}>
@@ -509,13 +536,15 @@ export default function CreatePlanScreen() {
                       <Text style={styles.planDescription} numberOfLines={2}>{item.description}</Text>
                     )}
                     <TouchableOpacity
-                      style={[styles.joinButton, isFull && styles.joinButtonDisabled]}
-                      onPress={() => !isFull && handleRequestJoin(item)}
-                      disabled={requesting === item.id || isFull}
+                      style={[styles.joinButton, (isFull || hasPendingRequest) && styles.joinButtonDisabled]}
+                      onPress={() => !isFull && !hasPendingRequest && handleRequestJoin(item)}
+                      disabled={requesting === item.id || isFull || hasPendingRequest}
                     >
                       <Text style={styles.joinButtonText}>
                         {requesting === item.id
                           ? t('createPlan.joining')
+                          : hasPendingRequest
+                            ? t('createPlan.requestPending')
                           : isFull
                             ? t('createPlan.full')
                             : t('createPlan.join')}

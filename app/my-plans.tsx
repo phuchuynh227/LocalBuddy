@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Modal,
   Platform,
   RefreshControl,
   SafeAreaView,
@@ -437,7 +436,7 @@ export default function MyPlansScreen() {
         )}
       </View>
 
-      <Modal visible={Boolean(selectedRequest)} transparent animationType="fade" onRequestClose={() => setSelectedRequest(null)}>
+      {selectedRequest && (
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setSelectedRequest(null)} />
           <View style={styles.modalCard}>
@@ -457,7 +456,7 @@ export default function MyPlansScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -514,7 +513,11 @@ const styles = StyleSheet.create({
   createButton: { backgroundColor: PRIMARY_BLUE, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },
   createButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   modalOverlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     backgroundColor: 'rgba(17, 24, 39, 0.45)',
     justifyContent: 'center',
     padding: 20,
@@ -524,6 +527,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     maxHeight: '70%',
+    width: '100%',
+    maxWidth: 390,
+    alignSelf: 'center',
+    overflow: 'hidden',
   },
   modalHeader: {
     alignItems: 'center',

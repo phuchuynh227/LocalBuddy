@@ -157,6 +157,7 @@ const translations = {
       save: 'Save info',
       skip: 'Skip for now',
       fillRequired: 'Please complete all required profile fields.',
+      requiredField: 'This field is required.',
       invalidBirthYear: 'Please enter a valid birth year.',
       saveFailed: 'Could not save your profile. Please try again.',
       avatarUploadFailed: 'Could not upload your avatar. Please try again.',
@@ -214,6 +215,8 @@ const translations = {
       reasonDate: 'Same day',
       reasonTimeExact: 'Same time',
       reasonTimeNear: 'Similar time',
+      requestPending: 'Waiting for host',
+      requestPendingTitle: 'Request already sent',
     },
     writeReview: {
       title: 'Write a review',
@@ -410,6 +413,7 @@ const translations = {
       save: 'Lưu thông tin',
       skip: 'Để sau',
       fillRequired: 'Vui lòng điền đầy đủ các trường bắt buộc.',
+      requiredField: 'Trường này là bắt buộc.',
       invalidBirthYear: 'Vui lòng nhập năm sinh hợp lệ.',
       saveFailed: 'Không thể lưu profile, vui lòng thử lại.',
       avatarUploadFailed: 'Không thể tải avatar, vui lòng thử lại.',
@@ -467,6 +471,8 @@ const translations = {
       reasonDate: 'Cùng ngày',
       reasonTimeExact: 'Cùng giờ',
       reasonTimeNear: 'Gần giờ',
+      requestPending: 'Đang chờ duyệt',
+      requestPendingTitle: 'Đã gửi yêu cầu',
     },
     writeReview: {
       title: 'Viết đánh giá',

@@ -2,7 +2,7 @@ import { Entypo } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -80,6 +80,9 @@ export default function PersonalInfoScreen() {
   const [visibility, setVisibility] = useState(DEFAULT_VISIBILITY_SETTINGS);
   const [loading, setLoading] = useState(false);
   const [pickingImage, setPickingImage] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
+  const scrollRef = useRef<ScrollView | null>(null);
+  const fieldPositions = useRef<Record<string, number>>({});
 
   useEffect(() => {
     setFullName(profile?.full_name ?? '');
@@ -104,6 +107,21 @@ export default function PersonalInfoScreen() {
       return;
     }
     Alert.alert(title, message);
+  };
+
+  const registerFieldPosition = (field: string, y: number) => {
+    fieldPositions.current[field] = y;
+  };
+
+  const scrollToField = (field: string) => {
+    const y = fieldPositions.current[field];
+    if (typeof y === 'number') {
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - 20), animated: true });
+    }
+  };
+
+  const clearFieldError = (field: string) => {
+    setFieldErrors((current) => ({ ...current, [field]: undefined }));
   };
 
   const handlePickAvatar = async () => {
@@ -204,19 +222,33 @@ export default function PersonalInfoScreen() {
       avatar_url: avatarUrl,
     };
 
-    if (!nextProfile.full_name || !nextProfile.nickname || !nextProfile.gender || !nextProfile.birth_year || !nextProfile.interests) {
+    const nextErrors: Record<string, string | undefined> = {};
+
+    if (!nextProfile.full_name) nextErrors.fullName = t('personalInfo.requiredField');
+    if (!nextProfile.nickname) nextErrors.nickname = t('personalInfo.requiredField');
+    if (!nextProfile.gender) nextErrors.gender = t('personalInfo.requiredField');
+    if (!nextProfile.birth_year) nextErrors.birthYear = t('personalInfo.requiredField');
+    if (!nextProfile.interests) nextErrors.interests = t('personalInfo.requiredField');
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      scrollToField(Object.keys(nextErrors)[0]);
       showMessage(t('writeReview.errorTitle'), t('personalInfo.fillRequired'));
       return;
     }
 
     const currentYear = new Date().getFullYear();
-    if (nextProfile.birth_year < 1900 || nextProfile.birth_year > currentYear) {
+    const birthYearValue = nextProfile.birth_year as number;
+    if (birthYearValue < 1900 || birthYearValue > currentYear) {
+      setFieldErrors((current) => ({ ...current, birthYear: t('personalInfo.invalidBirthYear') }));
+      scrollToField('birthYear');
       showMessage(t('writeReview.errorTitle'), t('personalInfo.invalidBirthYear'));
       return;
     }
 
     try {
       setLoading(true);
+      setFieldErrors({});
 
       const payload = {
         user_id: user.id,
@@ -249,7 +281,7 @@ export default function PersonalInfoScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.9}>
               <Text style={styles.backText}>{'<'}</Text>
@@ -279,50 +311,90 @@ export default function PersonalInfoScreen() {
           </View>
 
           <View style={styles.formSection}>
-            <Text style={styles.label}>{t('personalInfo.fullName')}</Text>
-            <TextInput style={styles.input} value={fullName} onChangeText={setFullName} placeholder={t('personalInfo.fullNamePlaceholder')} />
-
-            <Text style={styles.label}>{t('personalInfo.nickname')}</Text>
-            <TextInput style={styles.input} value={nickname} onChangeText={setNickname} placeholder={t('personalInfo.nicknamePlaceholder')} />
-
-            <Text style={styles.label}>{t('personalInfo.gender')}</Text>
-            <View style={styles.genderRow}>
-              {GENDER_OPTIONS.map((option) => {
-                const active = gender === option;
-                return (
-                  <TouchableOpacity
-                    key={option}
-                    style={[styles.genderChip, active && styles.genderChipActive]}
-                    onPress={() => setGender(option)}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={[styles.genderChipText, active && styles.genderChipTextActive]}>
-                      {t(`personalInfo.genderOptions.${option}`)}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+            <View onLayout={(event) => registerFieldPosition('fullName', event.nativeEvent.layout.y)}>
+              <Text style={styles.label}>{t('personalInfo.fullName')}</Text>
+              <TextInput
+                style={[styles.input, fieldErrors.fullName && styles.inputError]}
+                value={fullName}
+                onChangeText={(value) => {
+                  setFullName(value);
+                  if (value.trim()) clearFieldError('fullName');
+                }}
+                placeholder={t('personalInfo.fullNamePlaceholder')}
+              />
+              {!!fieldErrors.fullName && <Text style={styles.errorText}>{fieldErrors.fullName}</Text>}
             </View>
 
-            <Text style={styles.label}>{t('personalInfo.birthYear')}</Text>
-            <TextInput
-              style={styles.input}
-              value={birthYear}
-              onChangeText={setBirthYear}
-              placeholder={t('personalInfo.birthYearPlaceholder')}
-              keyboardType="number-pad"
-              maxLength={4}
-            />
+            <View onLayout={(event) => registerFieldPosition('nickname', event.nativeEvent.layout.y)}>
+              <Text style={styles.label}>{t('personalInfo.nickname')}</Text>
+              <TextInput
+                style={[styles.input, fieldErrors.nickname && styles.inputError]}
+                value={nickname}
+                onChangeText={(value) => {
+                  setNickname(value);
+                  if (value.trim()) clearFieldError('nickname');
+                }}
+                placeholder={t('personalInfo.nicknamePlaceholder')}
+              />
+              {!!fieldErrors.nickname && <Text style={styles.errorText}>{fieldErrors.nickname}</Text>}
+            </View>
 
-            <Text style={styles.label}>{t('personalInfo.interests')}</Text>
-            <TextInput
-              style={[styles.input, styles.multilineInput]}
-              value={interests}
-              onChangeText={setInterests}
-              placeholder={t('personalInfo.interestsPlaceholder')}
-              multiline
-              textAlignVertical="top"
-            />
+            <View onLayout={(event) => registerFieldPosition('gender', event.nativeEvent.layout.y)}>
+              <Text style={styles.label}>{t('personalInfo.gender')}</Text>
+              <View style={[styles.genderRow, fieldErrors.gender && styles.genderRowError]}>
+                {GENDER_OPTIONS.map((option) => {
+                  const active = gender === option;
+                  return (
+                    <TouchableOpacity
+                      key={option}
+                      style={[styles.genderChip, active && styles.genderChipActive]}
+                      onPress={() => {
+                        setGender(option);
+                        clearFieldError('gender');
+                      }}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={[styles.genderChipText, active && styles.genderChipTextActive]}>
+                        {t(`personalInfo.genderOptions.${option}`)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {!!fieldErrors.gender && <Text style={styles.errorText}>{fieldErrors.gender}</Text>}
+            </View>
+
+            <View onLayout={(event) => registerFieldPosition('birthYear', event.nativeEvent.layout.y)}>
+              <Text style={styles.label}>{t('personalInfo.birthYear')}</Text>
+              <TextInput
+                style={[styles.input, fieldErrors.birthYear && styles.inputError]}
+                value={birthYear}
+                onChangeText={(value) => {
+                  setBirthYear(value);
+                  if (value.trim()) clearFieldError('birthYear');
+                }}
+                placeholder={t('personalInfo.birthYearPlaceholder')}
+                keyboardType="number-pad"
+                maxLength={4}
+              />
+              {!!fieldErrors.birthYear && <Text style={styles.errorText}>{fieldErrors.birthYear}</Text>}
+            </View>
+
+            <View onLayout={(event) => registerFieldPosition('interests', event.nativeEvent.layout.y)}>
+              <Text style={styles.label}>{t('personalInfo.interests')}</Text>
+              <TextInput
+                style={[styles.input, styles.multilineInput, fieldErrors.interests && styles.inputError]}
+                value={interests}
+                onChangeText={(value) => {
+                  setInterests(value);
+                  if (value.trim()) clearFieldError('interests');
+                }}
+                placeholder={t('personalInfo.interestsPlaceholder')}
+                multiline
+                textAlignVertical="top"
+              />
+              {!!fieldErrors.interests && <Text style={styles.errorText}>{fieldErrors.interests}</Text>}
+            </View>
           </View>
 
           <View style={styles.visibilitySection}>
@@ -428,8 +500,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     color: '#111827',
   },
+  inputError: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
   multilineInput: { minHeight: 96, paddingTop: 14 },
   genderRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  genderRowError: {
+    borderWidth: 1,
+    borderColor: '#DC2626',
+    borderRadius: 12,
+    padding: 10,
+    backgroundColor: '#FEF2F2',
+  },
   genderChip: {
     borderWidth: 1,
     borderColor: '#BFDBFE',
@@ -463,6 +546,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   visibilityLabel: { fontSize: 14, color: '#1F2937', fontWeight: '500' },
+  errorText: { color: '#DC2626', fontSize: 12, fontWeight: '500', marginTop: 6 },
   saveButton: {
     marginTop: 24,
     backgroundColor: PRIMARY_BLUE,
