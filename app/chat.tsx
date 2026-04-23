@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,8 +13,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { UserAvatar } from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { useNotifications } from '../context/NotificationContext';
+import { getProfileDisplayName, normalizeUserProfile, UserProfile } from '../lib/user-profile';
 import { supabase } from '../lib/supabase';
 
 type Message = {
@@ -27,6 +31,7 @@ type Message = {
 export default function ChatScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { language, t } = useLanguage();
   const { markChatRead } = useNotifications();
   const { matchUserId, planTitle } = useLocalSearchParams<{
     matchUserId: string;
@@ -38,6 +43,9 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [buddyProfile, setBuddyProfile] = useState<UserProfile | null>(null);
+  const [showBuddyProfile, setShowBuddyProfile] = useState(false);
+  const [zoomedAvatarUrl, setZoomedAvatarUrl] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
   const fetchMessages = async (currentMatchId: string) => {
@@ -74,7 +82,15 @@ export default function ChatScreen() {
       setMatchId(data.id);
       await fetchMessages(data.id);
       await markChatRead(data.id);
+
+      const { data: profileData } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', matchUserId)
+        .maybeSingle();
+
       if (!active) return;
+      setBuddyProfile(normalizeUserProfile(profileData));
 
       channel = supabase
         .channel(`chat-${data.id}`)
@@ -137,7 +153,7 @@ export default function ChatScreen() {
       .single();
 
     if (!error && data) {
-      setMessages((prev) => prev.map((message) => message.id === optimisticMessage.id ? data : message));
+      setMessages((prev) => prev.map((message) => (message.id === optimisticMessage.id ? data : message)));
     } else {
       setMessages((prev) => prev.filter((message) => message.id !== optimisticMessage.id));
     }
@@ -148,6 +164,27 @@ export default function ChatScreen() {
   const formatTime = (iso: string) => {
     const date = new Date(iso);
     return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  };
+
+  const renderVisibleFields = () => {
+    const visibility = buddyProfile?.visibility_settings;
+    const rows: string[] = [];
+
+    if (visibility?.fullName && buddyProfile?.full_name) rows.push(`${t('personalInfo.fullName')}: ${buddyProfile.full_name}`);
+    if (visibility?.nickname && buddyProfile?.nickname) rows.push(`${t('personalInfo.nickname')}: ${buddyProfile.nickname}`);
+    if (visibility?.gender && buddyProfile?.gender) rows.push(`${t('personalInfo.gender')}: ${t(`personalInfo.genderOptions.${buddyProfile.gender}`)}`);
+    if (visibility?.birthYear && buddyProfile?.birth_year) rows.push(`${t('personalInfo.birthYear')}: ${buddyProfile.birth_year}`);
+    if (visibility?.interests && buddyProfile?.interests) rows.push(`${t('personalInfo.interests')}: ${buddyProfile.interests}`);
+
+    if (rows.length === 0) {
+      return <Text style={styles.previewEmpty}>{t('myPlans.profilePreviewEmpty')}</Text>;
+    }
+
+    return rows.map((row) => (
+      <Text key={row} style={styles.previewField}>
+        {row}
+      </Text>
+    ));
   };
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
@@ -176,14 +213,17 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>{'<'}</Text>
         </TouchableOpacity>
-        <View style={styles.headerInfo}>
+        <TouchableOpacity style={styles.headerProfile} activeOpacity={0.9} onPress={() => setShowBuddyProfile(true)}>
+          <UserAvatar profile={buddyProfile} fallbackText={matchUserId} size={42} textSize={16} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerInfo} activeOpacity={0.9} onPress={() => setShowBuddyProfile(true)}>
           <Text style={styles.headerTitle} numberOfLines={1}>
             {planTitle ? decodeURIComponent(planTitle) : 'Chat'}
           </Text>
           <Text style={styles.headerSubtitle}>
-            Buddy #{matchUserId?.slice(0, 8)}
+            {getProfileDisplayName(buddyProfile, `Buddy #${matchUserId?.slice(0, 8)}`)}
           </Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -198,7 +238,7 @@ export default function ChatScreen() {
         ) : matchId === null ? (
           <View style={styles.center}>
             <Text style={styles.emptyEmoji}>?</Text>
-            <Text style={styles.emptyText}>KhÃ´ng tÃ¬m tháº¥y cuá»™c trÃ² chuyá»‡n</Text>
+            <Text style={styles.emptyText}>{language === 'vn' ? 'Không tìm thấy cuộc trò chuyện' : 'Conversation not found'}</Text>
           </View>
         ) : (
           <FlatList
@@ -213,7 +253,7 @@ export default function ChatScreen() {
               <View style={styles.emptyChat}>
                 <Text style={styles.emptyChatEmoji}>...</Text>
                 <Text style={styles.emptyChatText}>
-                  Báº¯t Ä‘áº§u cuá»™c trÃ² chuyá»‡n vá»›i buddy!
+                  {language === 'vn' ? 'Bắt đầu cuộc trò chuyện với buddy!' : 'Start the conversation with your buddy!'}
                 </Text>
               </View>
             }
@@ -223,7 +263,7 @@ export default function ChatScreen() {
         <View style={styles.inputBar}>
           <TextInput
             style={styles.input}
-            placeholder="Nháº¯n tin..."
+            placeholder={language === 'vn' ? 'Nhắn tin...' : 'Message...'}
             value={text}
             onChangeText={setText}
             multiline
@@ -240,6 +280,39 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {showBuddyProfile && (
+        <View style={styles.overlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setShowBuddyProfile(false)} />
+          <View style={styles.previewCard}>
+            <TouchableOpacity
+              activeOpacity={0.92}
+              onPress={() => buddyProfile?.avatar_url && setZoomedAvatarUrl(buddyProfile.avatar_url)}
+              style={styles.previewAvatarWrap}
+            >
+              <UserAvatar profile={buddyProfile} fallbackText={matchUserId} size={72} textSize={26} />
+            </TouchableOpacity>
+            <Text style={styles.previewTitle}>
+              {getProfileDisplayName(buddyProfile, `Buddy #${matchUserId?.slice(0, 8)}`)}
+            </Text>
+            <View style={styles.previewScroll}>
+              {renderVisibleFields()}
+            </View>
+            <TouchableOpacity style={styles.previewCloseButton} onPress={() => setShowBuddyProfile(false)}>
+              <Text style={styles.previewCloseText}>{t('common.ok')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {zoomedAvatarUrl && (
+        <View style={styles.overlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setZoomedAvatarUrl(null)} />
+          <View style={styles.zoomCard}>
+            <Image source={{ uri: zoomedAvatarUrl }} style={styles.zoomImage} contentFit="contain" />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -251,6 +324,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   backButton: { width: 36, height: 36, backgroundColor: '#F5F7FB', borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   backText: { fontSize: 18, color: PRIMARY_BLUE, fontWeight: '700' },
+  headerProfile: { marginRight: 10 },
   headerInfo: { flex: 1 },
   headerTitle: { fontSize: 16, fontWeight: '700', color: '#1A1A1A' },
   headerSubtitle: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
@@ -274,4 +348,40 @@ const styles = StyleSheet.create({
   sendButton: { width: 42, height: 42, backgroundColor: PRIMARY_BLUE, borderRadius: 21, justifyContent: 'center', alignItems: 'center' },
   sendButtonDisabled: { backgroundColor: '#E5E7EB' },
   sendButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(17, 24, 39, 0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  previewCard: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 390,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 20,
+    overflow: 'hidden',
+  },
+  previewAvatarWrap: { alignSelf: 'center' },
+  previewTitle: { marginTop: 12, marginBottom: 14, fontSize: 18, fontWeight: '700', color: '#111827', textAlign: 'center' },
+  previewScroll: { maxHeight: 220 },
+  previewField: { fontSize: 14, color: '#374151', marginBottom: 10, lineHeight: 20 },
+  previewEmpty: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 20 },
+  previewCloseButton: { marginTop: 18, backgroundColor: PRIMARY_BLUE, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  previewCloseText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  zoomCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 16,
+    width: '100%',
+    maxWidth: 390,
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  zoomImage: { width: '100%', aspectRatio: 1, borderRadius: 18, backgroundColor: '#F3F4F6' },
 });

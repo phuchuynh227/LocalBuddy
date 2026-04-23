@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,8 +11,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { UserAvatar } from '../components/UserAvatar';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { getProfileDisplayName, normalizeUserProfile, UserProfile } from '../lib/user-profile';
 import { supabase } from '../lib/supabase';
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -38,6 +41,7 @@ type Match = {
   user2_id: string;
   created_at: string;
   plans: PlanInfo;
+  buddy_profile?: UserProfile | null;
 };
 
 type PendingRequest = {
@@ -56,21 +60,23 @@ export default function MyMatchesScreen() {
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedBuddyProfile, setSelectedBuddyProfile] = useState<UserProfile | null>(null);
+  const [zoomedAvatarUrl, setZoomedAvatarUrl] = useState<string | null>(null);
 
   const labels = useMemo(() => ({
-    empty: language === 'vn' ? 'Chua co match nao' : 'No matches yet',
+    empty: language === 'vn' ? 'Chưa có match nào' : 'No matches yet',
     emptySubtitle: language === 'vn'
-      ? 'Tao plan hoac tham gia plan cua nguoi khac de tim buddy.'
+      ? 'Tạo plan hoặc tham gia plan của người khác để tìm buddy.'
       : 'Create a plan or join someone else to find a buddy.',
-    pendingSection: language === 'vn' ? 'Dang cho xac nhan' : 'Waiting for confirmation',
-    matchedSection: language === 'vn' ? 'Da match' : 'Matched',
-    pendingBadge: language === 'vn' ? 'Cho duyet' : 'Pending',
-    matchedBadge: language === 'vn' ? 'Da match' : 'Matched',
-    yourBuddy: language === 'vn' ? 'Buddy cua ban' : 'Your buddy',
-    chatWithBuddy: language === 'vn' ? 'Nhan tin voi buddy' : 'Message buddy',
-    planFallback: language === 'vn' ? 'Plan' : 'Plan',
-    locationPrefix: language === 'vn' ? 'Dia diem:' : 'Location:',
-    timePrefix: language === 'vn' ? 'Thoi gian:' : 'Time:',
+    pendingSection: language === 'vn' ? 'Đang chờ xác nhận' : 'Waiting for confirmation',
+    matchedSection: language === 'vn' ? 'Đã match' : 'Matched',
+    pendingBadge: language === 'vn' ? 'Chờ duyệt' : 'Pending',
+    matchedBadge: language === 'vn' ? 'Đã match' : 'Matched',
+    yourBuddy: language === 'vn' ? 'Buddy của bạn' : 'Your buddy',
+    chatWithBuddy: language === 'vn' ? 'Nhắn tin với buddy' : 'Message buddy',
+    planFallback: 'Plan',
+    locationPrefix: language === 'vn' ? 'Địa điểm:' : 'Location:',
+    timePrefix: language === 'vn' ? 'Thời gian:' : 'Time:',
   }), [language]);
 
   const fetchData = useCallback(async () => {
@@ -96,7 +102,25 @@ export default function MyMatchesScreen() {
         .order('created_at', { ascending: false }),
     ]);
 
-    if (matchRes.data) setMatches(matchRes.data as any);
+    if (matchRes.data) {
+      const rawMatches = matchRes.data as Match[];
+      const buddyIds = rawMatches.map((match) => (match.user1_id === user.id ? match.user2_id : match.user1_id));
+      const { data: profileRows } = await supabase.from('user_profiles').select('*').in('user_id', buddyIds);
+      const profileMap = new Map(
+        (profileRows ?? [])
+          .map((row: any) => normalizeUserProfile(row))
+          .filter((row): row is UserProfile => Boolean(row))
+          .map((row) => [row.user_id, row]),
+      );
+
+      setMatches(
+        rawMatches.map((match) => ({
+          ...match,
+          buddy_profile: profileMap.get(match.user1_id === user.id ? match.user2_id : match.user1_id) ?? null,
+        })),
+      );
+    }
+
     if (requestRes.data) setPendingRequests(requestRes.data as any);
     setLoading(false);
     setRefreshing(false);
@@ -117,6 +141,27 @@ export default function MyMatchesScreen() {
   const formatTime = (iso: string) => {
     const date = new Date(iso);
     return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')} - ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+  };
+
+  const renderVisibleFields = () => {
+    const profile = selectedBuddyProfile;
+    const rows: string[] = [];
+
+    if (profile?.visibility_settings?.fullName && profile.full_name) rows.push(`${t('personalInfo.fullName')}: ${profile.full_name}`);
+    if (profile?.visibility_settings?.nickname && profile.nickname) rows.push(`${t('personalInfo.nickname')}: ${profile.nickname}`);
+    if (profile?.visibility_settings?.gender && profile.gender) rows.push(`${t('personalInfo.gender')}: ${t(`personalInfo.genderOptions.${profile.gender}`)}`);
+    if (profile?.visibility_settings?.birthYear && profile.birth_year) rows.push(`${t('personalInfo.birthYear')}: ${profile.birth_year}`);
+    if (profile?.visibility_settings?.interests && profile.interests) rows.push(`${t('personalInfo.interests')}: ${profile.interests}`);
+
+    if (rows.length === 0) {
+      return <Text style={styles.previewEmpty}>{t('myPlans.profilePreviewEmpty')}</Text>;
+    }
+
+    return rows.map((row) => (
+      <Text key={row} style={styles.previewField}>
+        {row}
+      </Text>
+    ));
   };
 
   const isEmpty = matches.length === 0 && pendingRequests.length === 0;
@@ -212,17 +257,13 @@ export default function MyMatchesScreen() {
                         </View>
                       </View>
 
-                      <View style={styles.buddyRow}>
-                        <View style={styles.buddyAvatar}>
-                          <Text style={styles.buddyAvatarText}>
-                            {buddyId.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
+                      <TouchableOpacity style={styles.buddyRow} activeOpacity={0.9} onPress={() => setSelectedBuddyProfile(item.buddy_profile ?? null)}>
+                        <UserAvatar profile={item.buddy_profile} fallbackText={buddyId} size={40} textSize={18} />
                         <View style={styles.buddyInfo}>
                           <Text style={styles.buddyLabel}>{labels.yourBuddy}</Text>
-                          <Text style={styles.buddyId}>#{buddyId.slice(0, 8)}</Text>
+                          <Text style={styles.buddyId}>{getProfileDisplayName(item.buddy_profile, `#${buddyId.slice(0, 8)}`)}</Text>
                         </View>
-                      </View>
+                      </TouchableOpacity>
 
                       <TouchableOpacity
                         style={styles.chatButton}
@@ -240,12 +281,42 @@ export default function MyMatchesScreen() {
           </ScrollView>
         )}
       </View>
+
+      {selectedBuddyProfile && (
+        <View style={styles.overlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setSelectedBuddyProfile(null)} />
+          <View style={styles.previewCard}>
+            <TouchableOpacity
+              activeOpacity={0.92}
+              onPress={() => selectedBuddyProfile.avatar_url && setZoomedAvatarUrl(selectedBuddyProfile.avatar_url)}
+              style={styles.previewAvatarWrap}
+            >
+              <UserAvatar profile={selectedBuddyProfile} fallbackText={selectedBuddyProfile.user_id} size={72} textSize={26} />
+            </TouchableOpacity>
+            <Text style={styles.previewTitle}>{getProfileDisplayName(selectedBuddyProfile, labels.yourBuddy)}</Text>
+            <View style={styles.previewScroll}>
+              {renderVisibleFields()}
+            </View>
+            <TouchableOpacity style={styles.previewCloseButton} onPress={() => setSelectedBuddyProfile(null)}>
+              <Text style={styles.previewCloseText}>{t('common.ok')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {zoomedAvatarUrl && (
+        <View style={styles.overlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setZoomedAvatarUrl(null)} />
+          <View style={styles.zoomCard}>
+            <Image source={{ uri: zoomedAvatarUrl }} style={styles.zoomImage} contentFit="contain" />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 const PRIMARY_BLUE = '#1E88E5';
-const LIGHT_BLUE = '#E3F2FD';
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
@@ -269,9 +340,7 @@ const styles = StyleSheet.create({
   pendingBadge: { backgroundColor: '#FEF3C7', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
   pendingBadgeText: { fontSize: 12, fontWeight: '700', color: '#92400E' },
   buddyRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#E5E7EB' },
-  buddyAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: LIGHT_BLUE, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  buddyAvatarText: { fontSize: 18, fontWeight: '700', color: PRIMARY_BLUE },
-  buddyInfo: { flex: 1 },
+  buddyInfo: { flex: 1, marginLeft: 12 },
   buddyLabel: { fontSize: 13, color: '#6B7280' },
   buddyId: { fontSize: 14, fontWeight: '600', color: '#1A1A1A', marginTop: 2 },
   chatButton: { backgroundColor: PRIMARY_BLUE, borderRadius: 12, padding: 12, alignItems: 'center' },
@@ -282,4 +351,40 @@ const styles = StyleSheet.create({
   emptySubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 24, paddingHorizontal: 20 },
   createButton: { backgroundColor: PRIMARY_BLUE, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },
   createButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(17, 24, 39, 0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  previewCard: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 390,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 20,
+    overflow: 'hidden',
+  },
+  previewAvatarWrap: { alignSelf: 'center' },
+  previewTitle: { marginTop: 12, marginBottom: 14, fontSize: 18, fontWeight: '700', color: '#111827', textAlign: 'center' },
+  previewScroll: { maxHeight: 220 },
+  previewField: { fontSize: 14, color: '#374151', marginBottom: 10, lineHeight: 20 },
+  previewEmpty: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 20 },
+  previewCloseButton: { marginTop: 18, backgroundColor: PRIMARY_BLUE, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  previewCloseText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  zoomCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 16,
+    width: '100%',
+    maxWidth: 390,
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  zoomImage: { width: '100%', aspectRatio: 1, borderRadius: 18, backgroundColor: '#F3F4F6' },
 });
